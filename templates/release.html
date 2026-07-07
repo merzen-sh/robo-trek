@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#ce422b',
+            'primary-foreground': '#ebe6da',
+            background: '#0d0d0c',
+            foreground: '#e0dbd3',
+            'muted-foreground': '#8c877e',
+          },
+          boxShadow: {
+            'neon': '0 0 15px rgba(206, 66, 43, 0.15)',
+            'neon-strong': '0 0 25px rgba(206, 66, 43, 0.3)',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #0d0d0c;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 0.75rem;
+      overflow: hidden;
+    }
+
+    .tech-card {
+      margin: 10px;
+      position: relative;
+      background: rgba(20, 20, 19, 0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(224, 219, 211, 0.08);
+    }
+
+    .card-effects {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      border-radius: inherit;
+      background-image:
+        radial-gradient(circle at 50% 50%, rgba(206, 66, 43, 0.06) 0%, transparent 60%),
+        linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+      background-size: 100% 100%, 24px 24px, 24px 24px;
+    }
+
+    .tech-card::before {
+      top: -1px;
+      left: -1px;
+      border-width: 2px 0 0 2px;
+    }
+
+    .tech-card::after {
+      bottom: -1px;
+      right: -1px;
+      border-width: 0 2px 2px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="tech-card p-4 w-full max-w-sm rounded-lg text-center overflow-hidden">
+    <div class="card-effects"></div>
+    <div
+      class="inline-flex items-center gap-1.5 bg-primary/10 border border-primary/20 text-primary-foreground text-[10px] font-semibold tracking-[0.2em] uppercase px-4 py-1 rounded shadow-neon mb-3">
+      <span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shadow-neon-strong"></span>
+      New Release
+    </div>
+
+    <div class="relative">
+      <h1 class="relative text-4xl font-black text-foreground tracking-tight font-mono">
+        {version}
+      </h1>
+    </div>
+  </div>
+</body>
+</html>
