@@ -325,6 +325,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "dotenvy"
+version = "0.15.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
+
+[[package]]
+name = "envy"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "20664407d5097b5a861dffb0c32af2be7215a0050415cb50232aec36d73f69df"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "errno"
 version = "0.3.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1180,6 +1195,8 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "crossbeam-channel",
+ "dotenvy",
+ "envy",
  "serde",
  "serde_json",
  "serenity",

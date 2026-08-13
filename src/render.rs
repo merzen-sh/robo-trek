@@ -16,9 +16,8 @@ fn template_dir() -> PathBuf {
 
 fn load_template(name: &str) -> Result<String, String> {
     let path = template_dir().join(name);
-    fs::read_to_string(&path).map_err(|e| {
-        format!("failed to read template {}: {e}", path.display())
-    })
+    fs::read_to_string(&path)
+        .map_err(|e| format!("failed to read template {}: {e}", path.display()))
 }
 
 fn fill_template(name: &str, vars: &[(&str, &str)]) -> Result<String, String> {
@@ -44,7 +43,12 @@ fn find_chrome() -> Option<PathBuf> {
             return Some(p);
         }
     }
-    for name in &["google-chrome", "google-chrome-stable", "chromium-browser", "chromium"] {
+    for name in &[
+        "google-chrome",
+        "google-chrome-stable",
+        "chromium-browser",
+        "chromium",
+    ] {
         if let Ok(out) = Command::new("which").arg(name).output() {
             if out.status.success() {
                 let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
@@ -62,8 +66,8 @@ fn render_html(html: &str) -> Result<Vec<u8>, String> {
     let raw_path = tmp.join(format!("robo-trek-{id}.png"));
     let trim_path = tmp.join(format!("robo-trek-{id}-trimmed.png"));
 
-    let mut f = fs::File::create(&html_path)
-        .map_err(|e| format!("failed to create temp html: {e}"))?;
+    let mut f =
+        fs::File::create(&html_path).map_err(|e| format!("failed to create temp html: {e}"))?;
     f.write_all(html.as_bytes())
         .map_err(|e| format!("failed to write html: {e}"))?;
     drop(f);
@@ -92,11 +96,20 @@ fn render_html(html: &str) -> Result<Vec<u8>, String> {
     }
 
     let trim_result = Command::new("magick")
-        .args(["convert", &raw_path.to_string_lossy(), "-trim", &trim_path.to_string_lossy()])
+        .args([
+            "convert",
+            &raw_path.to_string_lossy(),
+            "-trim",
+            &trim_path.to_string_lossy(),
+        ])
         .output()
         .or_else(|_| {
             Command::new("convert")
-                .args([&raw_path.to_string_lossy(), "-trim", &trim_path.to_string_lossy()])
+                .args([
+                    &raw_path.to_string_lossy(),
+                    "-trim",
+                    &trim_path.to_string_lossy(),
+                ])
                 .output()
         });
 
@@ -111,8 +124,7 @@ fn render_html(html: &str) -> Result<Vec<u8>, String> {
         }
     };
 
-    let png = fs::read(&final_path)
-        .map_err(|e| format!("failed to read screenshot: {e}"))?;
+    let png = fs::read(&final_path).map_err(|e| format!("failed to read screenshot: {e}"))?;
     let _ = fs::remove_file(&final_path);
 
     Ok(png)

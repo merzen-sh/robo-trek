@@ -1,21 +1,17 @@
 use std::{net::SocketAddr, sync::Arc};
 
 use axum::{
+    Json, Router,
     body::Body,
     extract::State,
     http::{Request, StatusCode},
     middleware::{self, Next},
-    response::{Response},
+    response::Response,
     routing::{get, post},
-    Json, Router,
 };
-use crossbeam_channel::Sender;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone)]
-pub struct AppState {
-    pub release_tx: Sender<String>,
-}
+use crate::AppState;
 
 #[derive(Serialize)]
 struct HealthResponse {
@@ -38,15 +34,18 @@ struct WebhookRelease {
     version: String,
 }
 
-async fn auth(req: Request<Body>, next: Next) -> Result<Response, StatusCode> {
-    let api_key = std::env::var("API_KEY").expect("API_KEY must be set");
+async fn auth(
+    State(state): State<Arc<AppState>>,
+    req: Request<Body>,
+    next: Next,
+) -> Result<Response, StatusCode> {
     let header = req
         .headers()
         .get("x-api-key")
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
 
-    if header != api_key {
+    if header != state.config.api_key {
         return Err(StatusCode::UNAUTHORIZED);
     }
 
@@ -90,15 +89,10 @@ pub async fn serve(state: Arc<AppState>) {
         .route("/", get(health))
         .route("/ping", get(ping))
         .route("/webhook/release", post(release_webhook))
-        .layer(middleware::from_fn(auth))
-        .with_state(state);
+        .layer(middleware::from_fn_with_state(state.clone(), auth))
+        .with_state(state.clone());
 
-    let port = std::env::var("API_PORT")
-        .unwrap_or_else(|_| "3000".to_string())
-        .parse::<u16>()
-        .expect("API_PORT must be a valid port number");
-
-    let addr = SocketAddr::from(([0, 0, 0, 0], port));
+    let addr = SocketAddr::from(([0, 0, 0, 0], state.config.api_port));
     println!("API server listening on {addr}");
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
