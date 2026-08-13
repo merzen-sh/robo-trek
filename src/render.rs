@@ -6,26 +6,25 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
+use handlebars::Handlebars;
+
 static COUNTER: AtomicU64 = AtomicU64::new(0);
 
-fn template_dir() -> PathBuf {
-    std::env::var("TEMPLATES_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("templates"))
-}
+const RELEASE_TEMPLATE: &str = include_str!("../templates/release.hbs");
+const HEAD_TEMPLATE: &str = include_str!("../templates/head.hbs");
 
-fn load_template(name: &str) -> Result<String, String> {
-    let path = template_dir().join(name);
-    fs::read_to_string(&path)
-        .map_err(|e| format!("failed to read template {}: {e}", path.display()))
-}
-
-fn fill_template(name: &str, vars: &[(&str, &str)]) -> Result<String, String> {
-    let mut tpl = load_template(name)?;
+fn render_template(name: &str, vars: &[(&str, &str)]) -> Result<String, String> {
+    let mut data = serde_json::Map::new();
     for (key, val) in vars {
-        tpl = tpl.replace(&format!("{{{key}}}"), val);
+        data.insert(key.to_string(), serde_json::Value::String(val.to_string()));
     }
-    Ok(tpl)
+    let mut reg = Handlebars::new();
+    reg.register_template_string("release", RELEASE_TEMPLATE)
+        .map_err(|e| format!("failed to register template: {e}"))?;
+    reg.register_template_string("head", HEAD_TEMPLATE)
+        .map_err(|e| format!("failed to register partial: {e}"))?;
+    reg.render(name, &data)
+        .map_err(|e| format!("failed to render template: {e}"))
 }
 
 fn find_chrome() -> Option<PathBuf> {
@@ -130,15 +129,7 @@ fn render_html(html: &str) -> Result<Vec<u8>, String> {
     Ok(png)
 }
 
-fn escape_html(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&#39;")
-}
-
 pub fn release_card(version: &str) -> Result<Vec<u8>, String> {
-    let html = fill_template("release.html", &[("version", &escape_html(version))])?;
+    let html = render_template("release", &[("version", version)])?;
     render_html(&html)
 }
