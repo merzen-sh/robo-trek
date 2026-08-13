@@ -5,6 +5,7 @@ use std::sync::Arc;
 pub mod api;
 pub mod commands;
 pub mod config;
+pub mod db;
 pub mod handler;
 pub mod render;
 pub mod worker;
@@ -13,4 +14,5 @@ pub mod worker;
 pub struct AppState {
     pub release_tx: Sender<String>,
     pub config: Arc<Config>,
+    pub db: db::Db,
 }

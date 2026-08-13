@@ -13,6 +13,7 @@ crossbeam-channel = "0.5"
 dotenvy = "0.15"
 envy = "0.3"
 handlebars = "6.4.4"
+redb = "4.1.0"
 
 [profile.release]
 opt-level = 'z'
