@@ -1,14 +1,17 @@
 use std::sync::Arc;
 
-use axum::{Router, middleware};
+use axum::{Router, middleware, routing::get};
 
-use crate::{AppState, middlewares::auth::auth};
+use crate::{AppState, handlers, middlewares::auth::auth};
 
 mod api;
 mod dashboard;
 
 pub fn router(state: Arc<AppState>) -> Router {
     Router::<Arc<AppState>>::new()
+        .route("/", get(handlers::home::dashboard_handle))
+        .route("/metrics", get(handlers::home::metrics_handle))
+        .route("/metrics/history", get(handlers::home::history_handle))
         .nest("/api", api::router())
         .nest("/dashboard", dashboard::router())
         .route_layer(middleware::from_fn_with_state(state.clone(), auth))
@@ -77,5 +80,29 @@ mod tests {
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
         assert!(body_str(resp).await.contains("Releases"));
+    }
+
+    #[tokio::test]
+    async fn home_requires_auth() {
+        let app = router(test_state("home-auth").0);
+        let resp = app.clone().oneshot(req("/")).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn home_accepts_cookie_key() {
+        let app = router(test_state("home-cookie").0);
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .uri("/")
+                    .header("cookie", "api_key=secret")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert!(body_str(resp).await.contains("Home"));
     }
 }

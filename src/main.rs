@@ -1,6 +1,6 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
-use robo_trek::{AppState, api, config, db, handler, worker};
+use robo_trek::{AppState, api, config, db, handler, metrics, worker};
 use serenity::{model::id::ChannelId, prelude::*};
 
 // Multi-threaded runtime: the Discord gateway, the API server, and the
@@ -29,9 +29,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         release_tx,
         config: Arc::clone(&config),
         db: db.clone(),
+        metrics_history: Arc::new(Mutex::new(metrics::MetricsHistory::new(60))),
     });
 
-    let worker_task = worker::spawn(release_rx, http, channel_id, db);
+    let worker_task = worker::spawn(release_rx, http, channel_id, db.clone());
+    let sampler_task = metrics::spawn_sampler(db, state.metrics_history.clone());
     let api_task = tokio::spawn(api::serve(state));
     let shard_manager = client.shard_manager.clone();
     let started = client.start();
@@ -49,6 +51,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         result = worker_task => match result {
             Ok(()) => println!("release worker stopped"),
             Err(e) => eprintln!("release worker panicked: {e}"),
+        },
+        result = sampler_task => match result {
+            Ok(()) => println!("metrics sampler stopped"),
+            Err(e) => eprintln!("metrics sampler panicked: {e}"),
         },
         _ = shutdown_signal() => {
             println!("shutting down");

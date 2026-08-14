@@ -1,6 +1,6 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
-use crate::{AppState, config::Config, db::Db};
+use crate::{AppState, config::Config, db::Db, metrics};
 
 pub fn test_state(name: &str) -> (Arc<AppState>, tokio::sync::mpsc::Receiver<String>) {
     let path = format!("/tmp/robo-trek-test-{}-{}.redb", std::process::id(), name);
@@ -17,6 +17,7 @@ pub fn test_state(name: &str) -> (Arc<AppState>, tokio::sync::mpsc::Receiver<Str
             guild_id: 456,
         }),
         db,
+        metrics_history: Arc::new(Mutex::new(metrics::MetricsHistory::new(10))),
     });
     (state, release_rx)
 }

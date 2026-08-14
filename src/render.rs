@@ -5,25 +5,53 @@ use std::{
     sync::OnceLock,
 };
 
-use handlebars::Handlebars;
+use handlebars::{
+    Context, Handlebars, Helper, HelperDef, HelperResult, Output, RenderContext,
+};
 use tempfile::TempDir;
 
 pub mod template {
     pub const RELEASE: &str = "release";
     pub const RELEASES: &str = "releases";
+    pub const HOME: &str = "home";
+    pub const METRICS: &str = "metrics";
 }
 
-const RELEASE_TEMPLATE: &str = include_str!("../templates/release.hbs");
-const RELEASES_TEMPLATE: &str = include_str!("../templates/releases.hbs");
-const HEAD_TEMPLATE: &str = include_str!("../templates/head.hbs");
-const TAILWIND_TEMPLATE: &str = include_str!("../templates/tailwind.hbs");
+const RELEASE_TEMPLATE: &str = include_str!("../handlebars/partials/release.hbs");
+const RELEASES_TEMPLATE: &str = include_str!("../handlebars/pages/releases.hbs");
+const HEAD_TEMPLATE: &str = include_str!("../handlebars/partials/head.hbs");
+const TAILWIND_TEMPLATE: &str = include_str!("../handlebars/partials/tailwind.hbs");
+const HOME_TEMPLATE: &str = include_str!("../handlebars/pages/home.hbs");
+const METRICS_TEMPLATE: &str = include_str!("../handlebars/partials/metrics.hbs");
+const NAVBAR_TEMPLATE: &str = include_str!("../handlebars/partials/navbar.hbs");
 
-const TEMPLATES: [(&str, &str); 4] = [
+const TEMPLATES: [(&str, &str); 7] = [
     (template::RELEASE, RELEASE_TEMPLATE),
     (template::RELEASES, RELEASES_TEMPLATE),
     ("head", HEAD_TEMPLATE),
     ("tailwind", TAILWIND_TEMPLATE),
+    (template::HOME, HOME_TEMPLATE),
+    (template::METRICS, METRICS_TEMPLATE),
+    ("navbar", NAVBAR_TEMPLATE),
 ];
+
+struct EqHelper;
+
+impl HelperDef for EqHelper {
+    fn call<'reg: 'rc, 'rc>(
+        &self,
+        h: &Helper<'rc>,
+        _reg: &'reg Handlebars<'reg>,
+        _ctx: &'rc Context,
+        _rc: &mut RenderContext<'reg, 'rc>,
+        out: &mut dyn Output,
+    ) -> HelperResult {
+        let a = h.param(0).map(|p| p.value()).unwrap_or(&serde_json::Value::Null);
+        let b = h.param(1).map(|p| p.value()).unwrap_or(&serde_json::Value::Null);
+        out.write(&(a == b).to_string())?;
+        Ok(())
+    }
+}
 
 fn registry() -> &'static Result<Handlebars<'static>, String> {
     static REGISTRY: OnceLock<Result<Handlebars<'static>, String>> = OnceLock::new();
@@ -33,6 +61,7 @@ fn registry() -> &'static Result<Handlebars<'static>, String> {
             reg.register_template_string(name, source)
                 .map_err(|e| format!("failed to register template '{name}': {e}"))?;
         }
+        reg.register_helper("eq", Box::new(EqHelper));
         Ok(reg)
     })
 }
@@ -188,5 +217,20 @@ mod tests {
     #[test]
     fn render_unknown_template_errors() {
         assert!(render("does-not-exist", &serde_json::json!({})).is_err());
+    }
+
+    #[test]
+    fn navbar_highlights_active_page() {
+        let html = render("navbar", &serde_json::json!({"active": "releases"})).unwrap();
+        assert!(html.contains(r#"href="/dashboard/releases""#));
+        assert!(html.contains("bg-primary"));
+        assert!(!html.contains("aria-current"));
+    }
+
+    #[test]
+    fn navbar_links_both_pages() {
+        let html = render("navbar", &serde_json::json!({"active": "home"})).unwrap();
+        assert!(html.contains(r#"href="/""#));
+        assert!(html.contains(r#"href="/dashboard/releases""#));
     }
 }

@@ -16,7 +16,7 @@ pub async fn releases_page_handle(
     State(state): State<Arc<AppState>>,
 ) -> Result<Html<String>, (StatusCode, Json<ErrorResponse>)> {
     let versions = state.db.list_releases().await.map_err(internal)?;
-    let data = serde_json::json!({ "releases": versions });
+    let data = serde_json::json!({ "active": "releases", "releases": versions });
     let html = render::render(render::template::RELEASES, &data).map_err(internal)?;
     Ok(Html(html))
 }

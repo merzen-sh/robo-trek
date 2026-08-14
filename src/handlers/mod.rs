@@ -1,5 +1,6 @@
 pub mod api;
 pub mod dashboard;
+pub mod home;
 
 use axum::{Json, http::StatusCode};
 use serde::Serialize;

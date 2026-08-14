@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  {{> tailwind}}
+  <script src="https://unpkg.com/htmx.org@2.0.10/dist/htmx.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
+</head>
+<body class="bg-[#0d0d0c] text-[#e0dbd3] min-h-screen p-8 font-mono">
+  <div class="max-w-2xl mx-auto">
+    <div
+      class="inline-flex items-center gap-1.5 bg-primary/10 border border-primary/20 text-primary-foreground text-[10px] font-semibold tracking-[0.2em] uppercase px-4 py-1 rounded shadow-neon mb-4">
+      <span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+      Robo Trek
+    </div>
+    <h1 class="text-2xl font-black tracking-tight mb-6">Home</h1>
+    {{> navbar}}
+    <div id="metrics">
+      <div id="metrics-cards" hx-get="/metrics" hx-trigger="every 2s" hx-swap="innerHTML">
+        {{> metrics}}
+      </div>
+      <div class="bg-[#141413]/80 border border-white/10 rounded-lg p-4">
+        <div class="flex items-center justify-between mb-2">
+          <div class="text-[10px] font-semibold tracking-[0.2em] uppercase text-[#8c877e]">CPU / Memory — history</div>
+          <div class="flex gap-1">
+            <button data-range="2m"
+              class="range-btn px-2 py-0.5 rounded text-[10px] font-semibold tracking-[0.1em] uppercase border border-white/10 text-[#8c877e] hover:text-[#e0dbd3] transition">2m</button>
+            <button data-range="1h"
+              class="range-btn px-2 py-0.5 rounded text-[10px] font-semibold tracking-[0.1em] uppercase border border-white/10 text-[#8c877e] hover:text-[#e0dbd3] transition">1h</button>
+            <button data-range="6h"
+              class="range-btn px-2 py-0.5 rounded text-[10px] font-semibold tracking-[0.1em] uppercase border border-white/10 text-[#8c877e] hover:text-[#e0dbd3] transition">6h</button>
+            <button data-range="24h"
+              class="range-btn px-2 py-0.5 rounded text-[10px] font-semibold tracking-[0.1em] uppercase border border-white/10 text-[#8c877e] hover:text-[#e0dbd3] transition">24h</button>
+          </div>
+        </div>
+        <div class="relative h-48">
+          <canvas id="metrics-chart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    var metricsChart = null;
+    var currentRange = '2m';
+
+    function readMetricsHistory() {
+      var dataEl = document.getElementById('metrics-history');
+      if (!dataEl) return null;
+      return JSON.parse(dataEl.textContent);
+    }
+
+    function updateMetricsChart(data) {
+      if (!metricsChart || !data) return;
+      metricsChart.data.labels = data.labels;
+      metricsChart.data.datasets[0].data = data.cpu;
+      metricsChart.data.datasets[1].data = data.mem;
+      metricsChart.update();
+    }
+
+    function setRangeButtons(range) {
+      document.querySelectorAll('[data-range]').forEach(function (btn) {
+        var active = btn.getAttribute('data-range') === range;
+        btn.classList.toggle('bg-primary', active);
+        btn.classList.toggle('text-primary-foreground', active);
+        btn.classList.toggle('shadow-neon', active);
+        btn.classList.toggle('border', !active);
+        btn.classList.toggle('border-white/10', !active);
+        btn.classList.toggle('text-[#8c877e]', !active);
+        btn.classList.toggle('hover:text-[#e0dbd3]', !active);
+      });
+    }
+
+    function setHistoryRange(range) {
+      currentRange = range;
+      setRangeButtons(range);
+      fetch('/metrics/history?range=' + encodeURIComponent(range))
+        .then(function (r) { return r.json(); })
+        .then(updateMetricsChart)
+        .catch(function (err) { console.error('failed to load history', err); });
+    }
+
+    function initMetricsChart() {
+      var el = document.getElementById('metrics-chart');
+      var data = readMetricsHistory();
+      if (!el || !data || typeof Chart === 'undefined') return;
+      metricsChart = new Chart(el, {
+        type: 'line',
+        data: {
+          labels: data.labels,
+          datasets: [
+            {
+              label: 'CPU',
+              data: data.cpu,
+              borderColor: '#ce422b',
+              backgroundColor: 'rgba(206, 66, 43, 0.12)',
+              tension: 0.3,
+              pointRadius: 0,
+              borderWidth: 2,
+              fill: true
+            },
+            {
+              label: 'Memory',
+              data: data.mem,
+              borderColor: '#e0dbd3',
+              backgroundColor: 'rgba(224, 219, 211, 0.08)',
+              tension: 0.3,
+              pointRadius: 0,
+              borderWidth: 2,
+              fill: true
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          scales: {
+            y: {
+              min: 0,
+              max: 100,
+              ticks: {
+                color: '#8c877e',
+                callback: function (value) { return value + '%'; }
+              },
+              grid: { color: 'rgba(255, 255, 255, 0.05)' }
+            },
+            x: {
+              ticks: { color: '#8c877e', maxTicksLimit: 6, maxRotation: 0 },
+              grid: { display: false }
+            }
+          },
+          plugins: {
+            legend: { labels: { color: '#e0dbd3', boxWidth: 12 } }
+          }
+        }
+      });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function () {
+        initMetricsChart();
+        setRangeButtons(currentRange);
+        document.body.addEventListener('htmx:afterSwap', function (event) {
+          if (event.detail && event.detail.target && event.detail.target.id === 'metrics-cards' && currentRange === '2m') {
+            updateMetricsChart(readMetricsHistory());
+          }
+        });
+      });
+    } else {
+      initMetricsChart();
+      setRangeButtons(currentRange);
+      document.body.addEventListener('htmx:afterSwap', function (event) {
+        if (event.detail && event.detail.target && event.detail.target.id === 'metrics-cards' && currentRange === '2m') {
+          updateMetricsChart(readMetricsHistory());
+        }
+      });
+    }
+
+    document.querySelectorAll('[data-range]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        setHistoryRange(btn.getAttribute('data-range'));
+      });
+    });
+  </script>
+</body>
+</html>
