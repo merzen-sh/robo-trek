@@ -14,7 +14,14 @@ serenity = { version = "0.12", default-features = false, features = [
     "rustls_backend",
     "utils",
 ] }
-tokio = { version = "1.21.2", features = ["macros", "net", "rt"] }
+tokio = { version = "1.21.2", features = [
+    "macros",
+    "net",
+    "rt",
+    "rt-multi-thread",
+    "signal",
+    "sync",
+] }
 axum = { version = "0.7", default-features = false, features = [
     "http1",
     "json",
@@ -22,7 +29,6 @@ axum = { version = "0.7", default-features = false, features = [
 ] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-crossbeam-channel = "0.5"
 dotenvy = "0.15"
 envy = "0.3"
 handlebars = "6.4.4"

@@ -1,5 +1,4 @@
 use crate::config::Config;
-use crossbeam_channel::Sender;
 use std::sync::Arc;
 
 pub mod api;
@@ -18,7 +17,7 @@ pub mod test_support;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub release_tx: Sender<String>,
+    pub release_tx: tokio::sync::mpsc::Sender<String>,
     pub config: Arc<Config>,
     pub db: db::Db,
 }

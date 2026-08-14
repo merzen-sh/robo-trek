@@ -43,6 +43,7 @@ pub async fn release_webhook_handle(
     state
         .release_tx
         .send(req.version)
+        .await
         .map_err(|e| internal(format!("failed to queue release: {e}")))?;
 
     Ok(Json(serde_json::json!({"status": "ok"})))
@@ -68,7 +69,7 @@ mod tests {
 
     #[tokio::test]
     async fn release_webhook_handle_queues_version() {
-        let (state, rx) = test_state("webhook");
+        let (state, mut rx) = test_state("webhook");
         let resp = release_webhook_handle(
             State(state),
             Json(WebhookRelease {

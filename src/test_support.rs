@@ -1,13 +1,12 @@
-use crossbeam_channel::{Receiver, unbounded};
 use std::sync::Arc;
 
 use crate::{AppState, config::Config, db::Db};
 
-pub fn test_state(name: &str) -> (Arc<AppState>, Receiver<String>) {
+pub fn test_state(name: &str) -> (Arc<AppState>, tokio::sync::mpsc::Receiver<String>) {
     let path = format!("/tmp/robo-trek-test-{}-{}.redb", std::process::id(), name);
     let _ = std::fs::remove_file(&path);
     let db = Db::open(path).unwrap();
-    let (release_tx, release_rx) = unbounded();
+    let (release_tx, release_rx) = tokio::sync::mpsc::channel(8);
     let state = Arc::new(AppState {
         release_tx,
         config: Arc::new(Config {

@@ -1,41 +1,64 @@
 use std::sync::Arc;
 
-use crossbeam_channel::unbounded;
 use robo_trek::{AppState, api, config, db, handler, worker};
 use serenity::{model::id::ChannelId, prelude::*};
 
-#[tokio::main(flavor = "current_thread")]
-async fn main() {
-    let config = Arc::new(config::Config::from_env().expect("failed to load configuration"));
-    let db = db::Db::open("robo-trek.redb").expect("failed to open database");
-
-    let token = config.discord_token.clone();
+// Multi-threaded runtime: the Discord gateway, the API server, and the
+// release worker all run concurrently, while Headless Chrome rendering is
+// isolated on Tokio's blocking pool.
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config = Arc::new(config::Config::from_env()?);
+    let db = db::Db::open("robo-trek.redb")?;
 
     let intents = GatewayIntents::GUILD_MESSAGES
         | GatewayIntents::DIRECT_MESSAGES
         | GatewayIntents::MESSAGE_CONTENT;
 
-    let mut client = Client::builder(&token, intents)
+    let mut client = Client::builder(&config.discord_token, intents)
         .event_handler(handler::Handler::new(Arc::clone(&config)))
-        .await
-        .expect("Err creating client");
+        .await?;
 
     let http = client.http.clone();
     let channel_id = ChannelId::new(config.discord_release_channel_id);
 
-    let (release_tx, release_rx) = unbounded::<String>();
-
-    worker::spawn(release_rx, http, channel_id, db.clone());
+    // Bounded queue gives backpressure when the worker falls behind.
+    let (release_tx, release_rx) = tokio::sync::mpsc::channel(64);
 
     let state = Arc::new(AppState {
         release_tx,
-        config,
-        db,
+        config: Arc::clone(&config),
+        db: db.clone(),
     });
 
-    std::mem::drop(tokio::spawn(api::serve(state)));
+    let worker_task = worker::spawn(release_rx, http, channel_id, db);
+    let api_task = tokio::spawn(api::serve(state));
+    let shard_manager = client.shard_manager.clone();
+    let started = client.start();
 
-    if let Err(why) = client.start().await {
-        println!("Client error: {why:?}");
+    tokio::select! {
+        result = api_task => match result {
+            Ok(Ok(())) => println!("API server stopped"),
+            Ok(Err(e)) => eprintln!("API server error: {e}"),
+            Err(e) => eprintln!("API server task panicked: {e}"),
+        },
+        result = started => match result {
+            Ok(()) => println!("Discord client stopped"),
+            Err(e) => eprintln!("Discord client error: {e:?}"),
+        },
+        result = worker_task => match result {
+            Ok(()) => println!("release worker stopped"),
+            Err(e) => eprintln!("release worker panicked: {e}"),
+        },
+        _ = shutdown_signal() => {
+            println!("shutting down");
+            shard_manager.shutdown_all().await;
+        }
     }
+
+    Ok(())
+}
+
+async fn shutdown_signal() {
+    let _ = tokio::signal::ctrl_c().await;
 }
