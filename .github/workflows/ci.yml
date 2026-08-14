@@ -61,3 +61,38 @@ jobs:
 
       - name: Test
         run: cargo test --all-targets --color always
+
+  migrations:
+    name: Migration test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry and build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          shared-key: ci
+
+      - name: Install sqlx-cli
+        run: cargo install sqlx-cli --no-default-features --features sqlite,rustls --locked
+
+      - name: Apply migrations to a throwaway database
+        env:
+          DB: sqlite:///tmp/robo-trek-migrations.sqlite
+        run: |
+          sqlx db create --database-url "$DB"
+          sqlx migrate run --source migrations --database-url "$DB"
+          sqlx migrate info --source migrations --database-url "$DB" | grep installed
+
+      - name: Revert and re-apply
+        env:
+          DB: sqlite:///tmp/robo-trek-migrations.sqlite
+        run: |
+          sqlx migrate revert --source migrations --database-url "$DB"
+          sqlx migrate info --source migrations --database-url "$DB" | grep pending
+          sqlx migrate run --source migrations --database-url "$DB"
+          sqlx migrate info --source migrations --database-url "$DB" | grep installed
