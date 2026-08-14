@@ -39,7 +39,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
-          shared-key: ci
+          shared-key: ci-lint
 
       - name: Lint
         env:
@@ -64,7 +64,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
-          shared-key: ci
+          shared-key: ci-test
 
       - name: Test
         run: cargo test --all-targets --color always
@@ -85,7 +85,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
-          shared-key: ci
+          shared-key: ci-migrations
 
       - name: Cache sqlx-cli binary
         uses: actions/cache@v4
