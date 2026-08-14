@@ -43,7 +43,10 @@ pub async fn history_handle(
 }
 
 fn current_metrics(active: &str, state: &AppState) -> Result<serde_json::Value, String> {
-    let history = state.metrics_history.lock().unwrap_or_else(|p| p.into_inner());
+    let history = state
+        .metrics_history
+        .lock()
+        .unwrap_or_else(|p| p.into_inner());
     let latest = history.latest().cloned();
     let snapshot = history.snapshot();
 
@@ -79,7 +82,7 @@ async fn history_data(range: &str, state: &AppState) -> Result<serde_json::Value
                 _ => 86_400,
             };
             let since = metrics::now_secs().saturating_sub(range_secs);
-            let rows = state.db.get_metrics_since(since).await?;
+            let rows = state.kv.get_metrics_since(since).await?;
             let mut labels = Vec::with_capacity(rows.len());
             let mut cpu = Vec::with_capacity(rows.len());
             let mut mem = Vec::with_capacity(rows.len());
@@ -112,7 +115,7 @@ mod tests {
 
     #[tokio::test]
     async fn metrics_handle_returns_fragment() {
-        let (state, _rx) = test_state("metrics");
+        let (state, _rx) = test_state("metrics").await;
         let Html(html) = metrics_handle(State(state)).await.unwrap();
         assert!(html.contains("CPU"));
         assert!(html.contains("Memory"));
@@ -121,7 +124,7 @@ mod tests {
 
     #[tokio::test]
     async fn dashboard_handle_renders_home() {
-        let (state, _rx) = test_state("home");
+        let (state, _rx) = test_state("home").await;
         let Html(html) = dashboard_handle(State(state)).await.unwrap();
         assert!(html.contains("Home"));
         assert!(html.contains("htmx"));
@@ -132,7 +135,7 @@ mod tests {
 
     #[tokio::test]
     async fn history_handle_returns_series() {
-        let (state, _rx) = test_state("history");
+        let (state, _rx) = test_state("history").await;
         let Json(value) = history_handle(
             State(state.clone()),
             Query(HistoryQuery {
@@ -158,7 +161,9 @@ mod tests {
             });
         let Json(value) = history_handle(
             State(state),
-            Query(HistoryQuery { range: Some("2m".into()) }),
+            Query(HistoryQuery {
+                range: Some("2m".into()),
+            }),
         )
         .await
         .unwrap();

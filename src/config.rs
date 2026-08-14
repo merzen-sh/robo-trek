@@ -4,6 +4,7 @@ use serde::Deserialize;
 pub struct Config {
     pub discord_token: String,
     pub discord_release_channel_id: u64,
+    pub discord_tickets_channel_id: u64,
     #[serde(default = "default_port")]
     pub api_port: u16,
     pub api_key: String,

@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use robo_trek::{AppState, api, config, db, handler, metrics, worker};
+use robo_trek::{AppState, api, config, db, handler, kv, metrics, tickets, worker};
 use serenity::{model::id::ChannelId, prelude::*};
 
 // Multi-threaded runtime: the Discord gateway, the API server, and the
@@ -9,14 +9,16 @@ use serenity::{model::id::ChannelId, prelude::*};
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Arc::new(config::Config::from_env()?);
-    let db = db::Db::open("robo-trek.redb")?;
+    let kv = kv::Kv::open("robo-trek.redb")?;
+    let db = db::Db::open("robo-trek.sqlite").await?;
+    let tickets = tickets::TicketStore::new(db.clone());
 
     let intents = GatewayIntents::GUILD_MESSAGES
         | GatewayIntents::DIRECT_MESSAGES
         | GatewayIntents::MESSAGE_CONTENT;
 
     let mut client = Client::builder(&config.discord_token, intents)
-        .event_handler(handler::Handler::new(Arc::clone(&config)))
+        .event_handler(handler::Handler::new(Arc::clone(&config), tickets.clone()))
         .await?;
 
     let http = client.http.clone();
@@ -28,12 +30,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let state = Arc::new(AppState {
         release_tx,
         config: Arc::clone(&config),
+        kv: kv.clone(),
         db: db.clone(),
+        tickets,
         metrics_history: Arc::new(Mutex::new(metrics::MetricsHistory::new(60))),
     });
 
-    let worker_task = worker::spawn(release_rx, http, channel_id, db.clone());
-    let sampler_task = metrics::spawn_sampler(db, state.metrics_history.clone());
+    let worker_task = worker::spawn(release_rx, http, channel_id, kv.clone());
+    let sampler_task = metrics::spawn_sampler(kv, state.metrics_history.clone());
     let api_task = tokio::spawn(api::serve(state));
     let shard_manager = client.shard_manager.clone();
     let started = client.start();

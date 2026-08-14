@@ -41,7 +41,7 @@ mod tests {
 
     #[tokio::test]
     async fn api_group_requires_auth() {
-        let app = router(test_state("api-auth").0);
+        let app = router(test_state("api-auth").await.0);
         let resp = app.clone().oneshot(req("/api/ping")).await.unwrap();
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
         let html = body_str(resp).await;
@@ -50,7 +50,7 @@ mod tests {
 
     #[tokio::test]
     async fn api_group_accepts_header_key() {
-        let app = router(test_state("api-header").0);
+        let app = router(test_state("api-header").await.0);
         let resp = app
             .oneshot(
                 Request::builder()
@@ -67,7 +67,7 @@ mod tests {
 
     #[tokio::test]
     async fn dashboard_group_accepts_cookie_key() {
-        let app = router(test_state("dash-cookie").0);
+        let app = router(test_state("dash-cookie").await.0);
         let resp = app
             .oneshot(
                 Request::builder()
@@ -84,14 +84,14 @@ mod tests {
 
     #[tokio::test]
     async fn home_requires_auth() {
-        let app = router(test_state("home-auth").0);
+        let app = router(test_state("home-auth").await.0);
         let resp = app.clone().oneshot(req("/")).await.unwrap();
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
     }
 
     #[tokio::test]
     async fn home_accepts_cookie_key() {
-        let app = router(test_state("home-cookie").0);
+        let app = router(test_state("home-cookie").await.0);
         let resp = app
             .oneshot(
                 Request::builder()
@@ -104,5 +104,33 @@ mod tests {
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
         assert!(body_str(resp).await.contains("Home"));
+    }
+
+    #[tokio::test]
+    async fn tickets_page_requires_auth() {
+        let app = router(test_state("tickets-auth").await.0);
+        let resp = app
+            .clone()
+            .oneshot(req("/dashboard/tickets"))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn tickets_page_accepts_cookie_key() {
+        let app = router(test_state("tickets-cookie").await.0);
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .uri("/dashboard/tickets")
+                    .header("cookie", "api_key=secret")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert!(body_str(resp).await.contains("Tickets"));
     }
 }

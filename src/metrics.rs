@@ -4,7 +4,7 @@ use std::{
     time::Duration,
 };
 
-use crate::db;
+use crate::kv;
 
 #[derive(Clone)]
 pub struct CpuTimes {
@@ -168,7 +168,10 @@ const SAMPLES_PER_FLUSH: u32 = 30;
 /// Continuously samples CPU/memory, feeds the in-memory ring buffer (for the
 /// live chart), and persists a per-minute aggregate to redb for long-term
 /// history. Keeps history warm even when the dashboard is closed.
-pub fn spawn_sampler(db: db::Db, history: Arc<Mutex<MetricsHistory>>) -> tokio::task::JoinHandle<()> {
+pub fn spawn_sampler(
+    kv: kv::Kv,
+    history: Arc<Mutex<MetricsHistory>>,
+) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let mut count = 0u32;
         let mut cpu_sum = 0.0f64;
@@ -187,8 +190,12 @@ pub fn spawn_sampler(db: db::Db, history: Arc<Mutex<MetricsHistory>>) -> tokio::
                     mem_sum += mem_percent;
                     count += 1;
                     if count >= SAMPLES_PER_FLUSH {
-                        if let Err(e) = db
-                            .put_metrics(now_secs(), cpu_sum / f64::from(count), mem_sum / f64::from(count))
+                        if let Err(e) = kv
+                            .put_metrics(
+                                now_secs(),
+                                cpu_sum / f64::from(count),
+                                mem_sum / f64::from(count),
+                            )
                             .await
                         {
                             eprintln!("failed to persist metrics: {e}");
@@ -235,7 +242,8 @@ mod tests {
 
     #[test]
     fn parses_meminfo() {
-        let contents = "MemTotal:        8192000 kB\nMemAvailable:    4096000 kB\nSwapTotal:       0 kB\n";
+        let contents =
+            "MemTotal:        8192000 kB\nMemAvailable:    4096000 kB\nSwapTotal:       0 kB\n";
         let mem = parse_mem(contents).unwrap();
         assert_eq!(mem.total_kb, 8192000);
         assert_eq!(mem.available_kb, 4096000);

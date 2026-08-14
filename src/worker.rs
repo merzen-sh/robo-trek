@@ -6,7 +6,7 @@ use serenity::{
     model::id::ChannelId,
 };
 
-use crate::{db, render};
+use crate::{kv, render};
 
 /// Spawns the release worker task.
 ///
@@ -18,11 +18,11 @@ pub fn spawn(
     mut release_rx: tokio::sync::mpsc::Receiver<String>,
     http: Arc<Http>,
     channel_id: ChannelId,
-    db: db::Db,
+    kv: kv::Kv,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         while let Some(version) = release_rx.recv().await {
-            if let Err(e) = process_release(&version, &http, channel_id, &db).await {
+            if let Err(e) = process_release(&version, &http, channel_id, &kv).await {
                 eprintln!("failed to process release {version}: {e}");
             }
         }
@@ -33,7 +33,7 @@ async fn process_release(
     version: &str,
     http: &Http,
     channel_id: ChannelId,
-    db: &db::Db,
+    kv: &kv::Kv,
 ) -> Result<(), String> {
     let version = version.to_string();
     let render_version = version.clone();
@@ -42,7 +42,7 @@ async fn process_release(
         .await
         .map_err(|e| format!("render task failed: {e}"))??;
 
-    db.put_release(&version, &png).await?;
+    kv.put_release(&version, &png).await?;
 
     let attachment = CreateAttachment::bytes(png, "release.png");
     let msg = CreateMessage::new()

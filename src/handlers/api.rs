@@ -69,7 +69,7 @@ mod tests {
 
     #[tokio::test]
     async fn release_webhook_handle_queues_version() {
-        let (state, mut rx) = test_state("webhook");
+        let (state, mut rx) = test_state("webhook").await;
         let resp = release_webhook_handle(
             State(state),
             Json(WebhookRelease {

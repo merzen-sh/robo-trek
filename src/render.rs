@@ -5,9 +5,7 @@ use std::{
     sync::OnceLock,
 };
 
-use handlebars::{
-    Context, Handlebars, Helper, HelperDef, HelperResult, Output, RenderContext,
-};
+use handlebars::{Context, Handlebars, Helper, HelperDef, HelperResult, Output, RenderContext};
 use tempfile::TempDir;
 
 pub mod template {
@@ -15,6 +13,7 @@ pub mod template {
     pub const RELEASES: &str = "releases";
     pub const HOME: &str = "home";
     pub const METRICS: &str = "metrics";
+    pub const TICKETS: &str = "tickets";
 }
 
 const RELEASE_TEMPLATE: &str = include_str!("../handlebars/partials/release.hbs");
@@ -24,8 +23,9 @@ const TAILWIND_TEMPLATE: &str = include_str!("../handlebars/partials/tailwind.hb
 const HOME_TEMPLATE: &str = include_str!("../handlebars/pages/home.hbs");
 const METRICS_TEMPLATE: &str = include_str!("../handlebars/partials/metrics.hbs");
 const NAVBAR_TEMPLATE: &str = include_str!("../handlebars/partials/navbar.hbs");
+const TICKETS_TEMPLATE: &str = include_str!("../handlebars/pages/tickets.hbs");
 
-const TEMPLATES: [(&str, &str); 7] = [
+const TEMPLATES: [(&str, &str); 8] = [
     (template::RELEASE, RELEASE_TEMPLATE),
     (template::RELEASES, RELEASES_TEMPLATE),
     ("head", HEAD_TEMPLATE),
@@ -33,6 +33,7 @@ const TEMPLATES: [(&str, &str); 7] = [
     (template::HOME, HOME_TEMPLATE),
     (template::METRICS, METRICS_TEMPLATE),
     ("navbar", NAVBAR_TEMPLATE),
+    (template::TICKETS, TICKETS_TEMPLATE),
 ];
 
 struct EqHelper;
@@ -46,8 +47,14 @@ impl HelperDef for EqHelper {
         _rc: &mut RenderContext<'reg, 'rc>,
         out: &mut dyn Output,
     ) -> HelperResult {
-        let a = h.param(0).map(|p| p.value()).unwrap_or(&serde_json::Value::Null);
-        let b = h.param(1).map(|p| p.value()).unwrap_or(&serde_json::Value::Null);
+        let a = h
+            .param(0)
+            .map(|p| p.value())
+            .unwrap_or(&serde_json::Value::Null);
+        let b = h
+            .param(1)
+            .map(|p| p.value())
+            .unwrap_or(&serde_json::Value::Null);
         out.write(&(a == b).to_string())?;
         Ok(())
     }
