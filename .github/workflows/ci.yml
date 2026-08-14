@@ -87,6 +87,12 @@ jobs:
           cache-on-failure: true
           shared-key: ci
 
+      - name: Cache sqlx-cli binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/sqlx
+          key: sqlx-cli-${{ runner.os }}
+
       - name: Install sqlx-cli
         run: cargo install sqlx-cli --no-default-features --features sqlite,rustls --locked
 
