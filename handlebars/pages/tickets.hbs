@@ -30,6 +30,21 @@
       <li class="text-[#8c877e]">No tickets yet.</li>
       {{/each}}
     </ul>
+    {{#if has_pagination}}
+    <div class="flex items-center justify-between mt-6 text-[10px] font-semibold tracking-[0.2em] uppercase">
+      <a href="/dashboard/tickets?page={{prev_page}}"
+        class="px-3 py-1.5 rounded border border-white/10 bg-[#141413]/80 transition-colors {{#unless has_prev}}pointer-events-none opacity-40{{/unless}}">Prev</a>
+      <div class="flex items-center gap-1">
+        {{#each pages}}
+        <a href="/dashboard/tickets?page={{n}}"
+          class="px-2.5 py-1 rounded {{#if current}}bg-primary text-primary-foreground shadow-neon{{else}}border border-white/10 bg-[#141413]/80 transition-colors hover:bg-white/5{{/if}}">{{n}}</a>
+        {{/each}}
+      </div>
+      <a href="/dashboard/tickets?page={{next_page}}"
+        class="px-3 py-1.5 rounded border border-white/10 bg-[#141413]/80 transition-colors {{#unless has_next}}pointer-events-none opacity-40{{/unless}}">Next</a>
+    </div>
+    <div class="text-center text-[11px] text-[#8c877e] mt-3">Page {{page}} of {{total_pages}} · {{total}} tickets</div>
+    {{/if}}
   </div>
 </body>
 </html>

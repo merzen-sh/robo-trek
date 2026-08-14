@@ -64,8 +64,30 @@ impl TicketStore {
             "SELECT id, guild_id, channel_id, user_id, username, subject, description, status, \
              opened_at, updated_at, closed_at, closed_by FROM tickets \
              ORDER BY CASE status WHEN 'open' THEN 0 WHEN 'in_progress' THEN 1 ELSE 2 END, \
-             opened_at DESC",
+             opened_at DESC, id DESC",
         )
+        .fetch_all(self.db.pool())
+        .await
+    }
+
+    pub const PAGE_SIZE: i64 = 10;
+
+    pub async fn count_tickets(&self) -> Result<i64, sqlx::Error> {
+        sqlx::query_scalar("SELECT COUNT(*) FROM tickets")
+            .fetch_one(self.db.pool())
+            .await
+    }
+
+    pub async fn list_tickets_page(&self, page: i64) -> Result<Vec<Ticket>, sqlx::Error> {
+        let offset = (page - 1) * Self::PAGE_SIZE;
+        sqlx::query_as::<_, Ticket>(
+            "SELECT id, guild_id, channel_id, user_id, username, subject, description, status, \
+             opened_at, updated_at, closed_at, closed_by FROM tickets \
+             ORDER BY CASE status WHEN 'open' THEN 0 WHEN 'in_progress' THEN 1 ELSE 2 END, \
+             opened_at DESC, id DESC LIMIT ?1 OFFSET ?2",
+        )
+        .bind(Self::PAGE_SIZE)
+        .bind(offset)
         .fetch_all(self.db.pool())
         .await
     }
@@ -159,6 +181,24 @@ mod tests {
         assert_eq!(tickets[0].id, open.id);
         assert_eq!(tickets[0].status, "open");
         assert_eq!(tickets[1].status, "closed");
+    }
+
+    #[tokio::test]
+    async fn paged_list_slices_by_page_size() {
+        let store = TicketStore::open_in_memory().await.unwrap();
+        for i in 0..25 {
+            store
+                .create_ticket("g", "u1", "mark", &format!("Ticket {i}"), "")
+                .await
+                .unwrap();
+        }
+        assert_eq!(store.count_tickets().await.unwrap(), 25);
+        assert_eq!(store.list_tickets_page(1).await.unwrap().len(), 10);
+        assert_eq!(store.list_tickets_page(2).await.unwrap().len(), 10);
+        let last = store.list_tickets_page(3).await.unwrap();
+        assert_eq!(last.len(), 5);
+        assert_eq!(last[0].id, 5);
+        assert!(store.list_tickets_page(4).await.unwrap().is_empty());
     }
 
     #[tokio::test]
