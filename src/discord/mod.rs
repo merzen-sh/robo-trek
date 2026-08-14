@@ -6,9 +6,7 @@ pub mod tickets;
 use crate::config::Config;
 use crate::storages::tickets::TicketStore;
 use serenity::async_trait;
-use serenity::builder::{
-    CreateInteractionResponse, CreateInteractionResponseMessage,
-};
+use serenity::builder::{CreateInteractionResponse, CreateInteractionResponseMessage};
 use serenity::gateway::ActivityData;
 use serenity::model::application::{ComponentInteraction, Interaction, ModalInteraction};
 use serenity::model::gateway::Ready;

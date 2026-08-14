@@ -76,8 +76,7 @@ pub async fn handle_modal(
     match channel
         .create_thread(
             &ctx.http,
-            CreateThread::new(thread_name)
-                .auto_archive_duration(AutoArchiveDuration::ThreeDays),
+            CreateThread::new(thread_name).auto_archive_duration(AutoArchiveDuration::ThreeDays),
         )
         .await
     {

@@ -8,8 +8,8 @@ use axum::{
     response::{Html, Response},
 };
 
-use crate::{AppState, render};
 use crate::storages::tickets::TicketStore;
+use crate::{AppState, render};
 
 use super::{ErrorResponse, internal};
 
@@ -173,15 +173,14 @@ mod tests {
                 .await
                 .unwrap();
         }
-        let Html(page1) = tickets_page_handle(State(state.clone()), Query(TicketQuery { page: None }))
-            .await
-            .unwrap();
-        let Html(page2) = tickets_page_handle(
-            State(state.clone()),
-            Query(TicketQuery { page: Some(2) }),
-        )
-        .await
-        .unwrap();
+        let Html(page1) =
+            tickets_page_handle(State(state.clone()), Query(TicketQuery { page: None }))
+                .await
+                .unwrap();
+        let Html(page2) =
+            tickets_page_handle(State(state.clone()), Query(TicketQuery { page: Some(2) }))
+                .await
+                .unwrap();
         assert!(page1.contains("Ticket 24"));
         assert!(!page1.contains("Ticket 9"));
         assert!(page1.contains(r#"href="/dashboard/tickets?page=2""#));
@@ -200,12 +199,9 @@ mod tests {
                 .await
                 .unwrap();
         }
-        let Html(html) = tickets_page_handle(
-            State(state),
-            Query(TicketQuery { page: Some(999) }),
-        )
-        .await
-        .unwrap();
+        let Html(html) = tickets_page_handle(State(state), Query(TicketQuery { page: Some(999) }))
+            .await
+            .unwrap();
         assert!(html.contains("Ticket 0"));
         assert!(html.contains("Page 3 of 3"));
     }
