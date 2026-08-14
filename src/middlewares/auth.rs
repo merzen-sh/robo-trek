@@ -24,9 +24,7 @@ fn provided_key(req: &Request<Body>) -> &str {
         .unwrap_or("")
         .split(';')
         .filter_map(|part| {
-            let mut it = part.trim().splitn(2, '=');
-            let name = it.next()?;
-            let val = it.next()?;
+            let (name, val) = part.trim().split_once('=')?;
             (name == "api_key").then_some(val)
         })
         .next()

@@ -4,7 +4,7 @@ use crossbeam_channel::unbounded;
 use robo_trek::{AppState, api, config, db, handler, worker};
 use serenity::{model::id::ChannelId, prelude::*};
 
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn main() {
     let config = Arc::new(config::Config::from_env().expect("failed to load configuration"));
     let db = db::Db::open("robo-trek.redb").expect("failed to open database");
@@ -33,7 +33,7 @@ async fn main() {
         db,
     });
 
-    let _ = tokio::spawn(api::serve(state));
+    std::mem::drop(tokio::spawn(api::serve(state)));
 
     if let Err(why) = client.start().await {
         println!("Client error: {why:?}");

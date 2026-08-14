@@ -4,9 +4,22 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-serenity = "0.12"
-tokio = { version = "1.21.2", features = ["macros", "rt-multi-thread", "net"] }
-axum = "0.7"
+serenity = { version = "0.12", default-features = false, features = [
+    "builder",
+    "chrono",
+    "client",
+    "gateway",
+    "http",
+    "model",
+    "rustls_backend",
+    "utils",
+] }
+tokio = { version = "1.21.2", features = ["macros", "net", "rt"] }
+axum = { version = "0.7", default-features = false, features = [
+    "http1",
+    "json",
+    "tokio",
+] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 crossbeam-channel = "0.5"
@@ -18,9 +31,10 @@ tempfile = "3.27.0"
 
 [profile.release]
 opt-level = 'z'
-lto = true
+lto = "fat"
 codegen-units = 1
-strip = 'symbols'
+strip = true
+panic = "abort"
 
 [dev-dependencies]
 http-body-util = "0.1.5"
