@@ -1,6 +1,12 @@
 use crate::db;
 use crate::models::ticket::Ticket;
 
+#[derive(Default, Clone)]
+pub struct TicketFilters {
+    pub status: Option<String>,
+    pub search: Option<String>,
+}
+
 #[derive(Clone)]
 pub struct TicketStore {
     db: db::Db,
@@ -72,24 +78,52 @@ impl TicketStore {
 
     pub const PAGE_SIZE: i64 = 10;
 
-    pub async fn count_tickets(&self) -> Result<i64, sqlx::Error> {
-        sqlx::query_scalar("SELECT COUNT(*) FROM tickets")
-            .fetch_one(self.db.pool())
-            .await
+    fn push_filters(builder: &mut sqlx::QueryBuilder<sqlx::Sqlite>, filters: &TicketFilters) {
+        let mut clause = false;
+        if let Some(status) = &filters.status {
+            builder.push(" WHERE status = ");
+            builder.push_bind(status);
+            clause = true;
+        }
+        if let Some(q) = &filters.search {
+            builder.push(if clause { " AND (" } else { " WHERE (" });
+            builder.push("subject LIKE ");
+            builder.push_bind(format!("%{q}%"));
+            builder.push(" OR username LIKE ");
+            builder.push_bind(format!("%{q}%"));
+            builder.push(" OR id = ");
+            builder.push_bind(q.parse::<i64>().unwrap_or(-1));
+            builder.push(")");
+        }
     }
 
-    pub async fn list_tickets_page(&self, page: i64) -> Result<Vec<Ticket>, sqlx::Error> {
-        let offset = (page - 1) * Self::PAGE_SIZE;
-        sqlx::query_as::<_, Ticket>(
+    pub async fn count_tickets(&self, filters: &TicketFilters) -> Result<i64, sqlx::Error> {
+        let mut builder = sqlx::QueryBuilder::new("SELECT COUNT(*) FROM tickets");
+        Self::push_filters(&mut builder, filters);
+        builder.build_query_scalar().fetch_one(self.db.pool()).await
+    }
+
+    pub async fn list_tickets_page(
+        &self,
+        page: i64,
+        filters: &TicketFilters,
+    ) -> Result<Vec<Ticket>, sqlx::Error> {
+        let mut builder = sqlx::QueryBuilder::new(
             "SELECT id, guild_id, channel_id, user_id, username, subject, description, status, \
-             opened_at, updated_at, closed_at, closed_by FROM tickets \
-             ORDER BY CASE status WHEN 'open' THEN 0 WHEN 'in_progress' THEN 1 ELSE 2 END, \
-             opened_at DESC, id DESC LIMIT ?1 OFFSET ?2",
-        )
-        .bind(Self::PAGE_SIZE)
-        .bind(offset)
-        .fetch_all(self.db.pool())
-        .await
+             opened_at, updated_at, closed_at, closed_by FROM tickets",
+        );
+        Self::push_filters(&mut builder, filters);
+        builder.push(
+            " ORDER BY CASE status WHEN 'open' THEN 0 WHEN 'in_progress' THEN 1 ELSE 2 END, \
+             opened_at DESC, id DESC LIMIT ",
+        );
+        builder.push_bind(Self::PAGE_SIZE);
+        builder.push(" OFFSET ");
+        builder.push_bind((page - 1) * Self::PAGE_SIZE);
+        builder
+            .build_query_as::<Ticket>()
+            .fetch_all(self.db.pool())
+            .await
     }
 
     pub async fn set_channel(&self, id: i64, channel_id: &str) -> Result<(), sqlx::Error> {
@@ -186,19 +220,90 @@ mod tests {
     #[tokio::test]
     async fn paged_list_slices_by_page_size() {
         let store = TicketStore::open_in_memory().await.unwrap();
+        let filters = TicketFilters::default();
         for i in 0..25 {
             store
                 .create_ticket("g", "u1", "mark", &format!("Ticket {i}"), "")
                 .await
                 .unwrap();
         }
-        assert_eq!(store.count_tickets().await.unwrap(), 25);
-        assert_eq!(store.list_tickets_page(1).await.unwrap().len(), 10);
-        assert_eq!(store.list_tickets_page(2).await.unwrap().len(), 10);
-        let last = store.list_tickets_page(3).await.unwrap();
+        assert_eq!(store.count_tickets(&filters).await.unwrap(), 25);
+        assert_eq!(
+            store.list_tickets_page(1, &filters).await.unwrap().len(),
+            10
+        );
+        assert_eq!(
+            store.list_tickets_page(2, &filters).await.unwrap().len(),
+            10
+        );
+        let last = store.list_tickets_page(3, &filters).await.unwrap();
         assert_eq!(last.len(), 5);
         assert_eq!(last[0].id, 5);
-        assert!(store.list_tickets_page(4).await.unwrap().is_empty());
+        assert!(
+            store
+                .list_tickets_page(4, &filters)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[tokio::test]
+    async fn filters_status_and_search() {
+        let store = TicketStore::open_in_memory().await.unwrap();
+        store
+            .create_ticket("g", "u1", "mark", "Server down", "outage")
+            .await
+            .unwrap();
+        store
+            .create_ticket("g", "u2", "jane", "UI bug", "styling")
+            .await
+            .unwrap();
+        let third = store
+            .create_ticket("g", "u3", "bob", "Server down", "again")
+            .await
+            .unwrap();
+        store.close_ticket(third.id, "staff").await.unwrap();
+
+        let open = TicketFilters {
+            status: Some("open".into()),
+            search: None,
+        };
+        assert_eq!(store.count_tickets(&open).await.unwrap(), 2);
+        assert!(
+            store
+                .list_tickets_page(1, &open)
+                .await
+                .unwrap()
+                .iter()
+                .all(|t| t.status == "open")
+        );
+
+        let subject = TicketFilters {
+            status: None,
+            search: Some("Server".into()),
+        };
+        assert_eq!(store.count_tickets(&subject).await.unwrap(), 2);
+
+        let username = TicketFilters {
+            status: None,
+            search: Some("jane".into()),
+        };
+        let hits = store.list_tickets_page(1, &username).await.unwrap();
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].username, "jane");
+
+        let by_id = TicketFilters {
+            status: None,
+            search: Some(third.id.to_string()),
+        };
+        assert_eq!(store.count_tickets(&by_id).await.unwrap(), 1);
+
+        let combined = TicketFilters {
+            status: Some("open".into()),
+            search: Some("Server".into()),
+        };
+        assert_eq!(store.count_tickets(&combined).await.unwrap(), 1);
     }
 
     #[tokio::test]

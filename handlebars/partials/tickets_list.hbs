@@ -1,0 +1,34 @@
+<ul class="space-y-3">
+      {{#each tickets}}
+      <li>
+        <div class="flex items-center gap-2 bg-[#141413]/80 border border-white/10 rounded-lg px-4 py-3">
+          <span class="w-1.5 h-1.5 rounded-full {{#if (eq status "open")}}bg-amber-400{{else if (eq status "in_progress")}}bg-sky-400{{else}}bg-[#8c877e]{{/if}}"></span>
+          <div class="flex-1 min-w-0">
+            <div class="font-semibold truncate">{{subject}}</div>
+            <div class="text-[11px] text-[#8c877e]">#{{id}} · {{username}} · {{opened_label}}</div>
+          </div>
+          <span class="text-[10px] font-semibold tracking-[0.2em] uppercase {{#if (eq status "open")}}text-amber-400{{else if (eq status "in_progress")}}text-sky-400{{else}}text-[#8c877e]{{/if}}">{{status}}</span>
+        </div>
+      </li>
+      {{else}}
+      <li class="text-[#8c877e]">{{#if has_filter}}No tickets match your filters.{{else}}No tickets yet.{{/if}}</li>
+      {{/each}}
+    </ul>
+    {{#if has_pagination}}
+    <div class="flex items-center justify-between mt-6 text-[10px] font-semibold tracking-[0.2em] uppercase">
+      <a href="/dashboard/tickets?page={{prev_page}}{{{qstr}}}"
+        hx-get="/dashboard/tickets/fragment?page={{prev_page}}{{{qstr}}}" hx-target="#tickets-list" hx-swap="innerHTML" hx-push-url="true"
+        class="px-3 py-1.5 rounded border border-white/10 bg-[#141413]/80 transition-colors {{#unless has_prev}}pointer-events-none opacity-40{{/unless}}">Prev</a>
+      <div class="flex items-center gap-1">
+        {{#each pages}}
+        <a href="/dashboard/tickets?page={{n}}{{{../qstr}}}"
+          hx-get="/dashboard/tickets/fragment?page={{n}}{{{../qstr}}}" hx-target="#tickets-list" hx-swap="innerHTML" hx-push-url="true"
+          class="px-2.5 py-1 rounded {{#if current}}bg-primary text-primary-foreground shadow-neon{{else}}border border-white/10 bg-[#141413]/80 transition-colors hover:bg-white/5{{/if}}">{{n}}</a>
+        {{/each}}
+      </div>
+      <a href="/dashboard/tickets?page={{next_page}}{{{qstr}}}"
+        hx-get="/dashboard/tickets/fragment?page={{next_page}}{{{qstr}}}" hx-target="#tickets-list" hx-swap="innerHTML" hx-push-url="true"
+        class="px-3 py-1.5 rounded border border-white/10 bg-[#141413]/80 transition-colors {{#unless has_next}}pointer-events-none opacity-40{{/unless}}">Next</a>
+    </div>
+    <div class="text-center text-[11px] text-[#8c877e] mt-3">Page {{page}} of {{total_pages}} · {{total}} tickets</div>
+    {{/if}}

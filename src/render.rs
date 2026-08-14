@@ -14,6 +14,7 @@ pub mod template {
     pub const HOME: &str = "home";
     pub const METRICS: &str = "metrics";
     pub const TICKETS: &str = "tickets";
+    pub const TICKETS_LIST: &str = "tickets_list";
 }
 
 const RELEASE_TEMPLATE: &str = include_str!("../handlebars/partials/release.hbs");
@@ -24,8 +25,9 @@ const HOME_TEMPLATE: &str = include_str!("../handlebars/pages/home.hbs");
 const METRICS_TEMPLATE: &str = include_str!("../handlebars/partials/metrics.hbs");
 const NAVBAR_TEMPLATE: &str = include_str!("../handlebars/partials/navbar.hbs");
 const TICKETS_TEMPLATE: &str = include_str!("../handlebars/pages/tickets.hbs");
+const TICKETS_LIST_TEMPLATE: &str = include_str!("../handlebars/partials/tickets_list.hbs");
 
-const TEMPLATES: [(&str, &str); 8] = [
+const TEMPLATES: [(&str, &str); 9] = [
     (template::RELEASE, RELEASE_TEMPLATE),
     (template::RELEASES, RELEASES_TEMPLATE),
     ("head", HEAD_TEMPLATE),
@@ -34,6 +36,7 @@ const TEMPLATES: [(&str, &str); 8] = [
     (template::METRICS, METRICS_TEMPLATE),
     ("navbar", NAVBAR_TEMPLATE),
     (template::TICKETS, TICKETS_TEMPLATE),
+    (template::TICKETS_LIST, TICKETS_LIST_TEMPLATE),
 ];
 
 struct EqHelper;
