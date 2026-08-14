@@ -1,13 +1,13 @@
 use std::sync::{Arc, Mutex};
 
-use crate::{AppState, config::Config, db, kv::Kv, metrics, tickets};
+use crate::{AppState, config::Config, db, kv::Kv, metrics, storages};
 
 pub async fn test_state(name: &str) -> (Arc<AppState>, tokio::sync::mpsc::Receiver<String>) {
     let path = format!("/tmp/robo-trek-test-{}-{}.redb", std::process::id(), name);
     let _ = std::fs::remove_file(&path);
     let kv = Kv::open(path).unwrap();
     let db = db::Db::open_in_memory().await.unwrap();
-    let tickets = tickets::TicketStore::new(db.clone());
+    let tickets = storages::tickets::TicketStore::new(db.clone());
     let (release_tx, release_rx) = tokio::sync::mpsc::channel(8);
     let state = Arc::new(AppState {
         release_tx,

@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use robo_trek::{AppState, api, config, db, handler, kv, metrics, tickets, worker};
+use robo_trek::{AppState, api, config, db, discord, kv, metrics, storages, worker};
 use serenity::{model::id::ChannelId, prelude::*};
 
 // Multi-threaded runtime: the Discord gateway, the API server, and the
@@ -11,14 +11,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Arc::new(config::Config::from_env()?);
     let kv = kv::Kv::open("robo-trek.redb")?;
     let db = db::Db::open("robo-trek.sqlite").await?;
-    let tickets = tickets::TicketStore::new(db.clone());
+    let tickets = storages::tickets::TicketStore::new(db.clone());
 
     let intents = GatewayIntents::GUILD_MESSAGES
         | GatewayIntents::DIRECT_MESSAGES
         | GatewayIntents::MESSAGE_CONTENT;
 
     let mut client = Client::builder(&config.discord_token, intents)
-        .event_handler(handler::Handler::new(Arc::clone(&config), tickets.clone()))
+        .event_handler(discord::Handler::new(Arc::clone(&config), tickets.clone()))
         .await?;
 
     let http = client.http.clone();
