@@ -8,6 +8,7 @@ pub mod config;
 pub mod db;
 pub mod handler;
 pub mod handlers;
+pub mod middlewares;
 pub mod render;
 pub mod routes;
 pub mod worker;

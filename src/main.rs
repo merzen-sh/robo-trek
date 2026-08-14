@@ -7,6 +7,7 @@ use serenity::{model::id::ChannelId, prelude::*};
 #[tokio::main]
 async fn main() {
     let config = Arc::new(config::Config::from_env().expect("failed to load configuration"));
+    let db = db::Db::open("robo-trek.redb").expect("failed to open database");
 
     let token = config.discord_token.clone();
 
@@ -23,8 +24,6 @@ async fn main() {
     let channel_id = ChannelId::new(config.discord_release_channel_id);
 
     let (release_tx, release_rx) = unbounded::<String>();
-
-    let db = db::Db::open("robo-trek.redb").expect("failed to open database");
 
     worker::spawn(release_rx, http, channel_id, db.clone());
 

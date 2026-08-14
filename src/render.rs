@@ -116,8 +116,7 @@ fn render_html(html: &str) -> Result<Vec<u8>, String> {
     let raw_path = dir.path().join("card.png");
     let trim_path = dir.path().join("card-trimmed.png");
 
-    fs::write(&html_path, html.as_bytes())
-        .map_err(|e| format!("failed to write html: {e}"))?;
+    fs::write(&html_path, html.as_bytes()).map_err(|e| format!("failed to write html: {e}"))?;
 
     let output = Command::new(&chrome)
         .args([
