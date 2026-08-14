@@ -42,6 +42,10 @@ jobs:
           shared-key: ci
 
       - name: Lint
+        env:
+          # Clippy only links build-script/proc-macro crates, so skip the mold
+          # linker (set in .cargo/config.toml) and use the default rust-lld.
+          RUSTFLAGS: ""
         run: cargo clippy --all-targets -- -D warnings
 
   test:
