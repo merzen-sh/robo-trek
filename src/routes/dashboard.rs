@@ -1,0 +1,14 @@
+use std::sync::Arc;
+
+use axum::{Router, routing::get};
+
+use crate::{AppState, handlers};
+
+pub fn router() -> Router<Arc<AppState>> {
+    Router::new()
+        .route("/releases", get(handlers::dashboard::releases_page_handle))
+        .route(
+            "/releases/:version",
+            get(handlers::dashboard::release_image_handle),
+        )
+}

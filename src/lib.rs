@@ -7,8 +7,13 @@ pub mod commands;
 pub mod config;
 pub mod db;
 pub mod handler;
+pub mod handlers;
 pub mod render;
+pub mod routes;
 pub mod worker;
+
+#[cfg(test)]
+pub mod test_support;
 
 #[derive(Clone)]
 pub struct AppState {

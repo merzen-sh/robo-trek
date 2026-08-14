@@ -1,26 +1,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            primary: '#ce422b',
-            'primary-foreground': '#ebe6da',
-            background: '#0d0d0c',
-            foreground: '#e0dbd3',
-            'muted-foreground': '#8c877e',
-          },
-          boxShadow: {
-            'neon': '0 0 15px rgba(206, 66, 43, 0.15)',
-            'neon-strong': '0 0 25px rgba(206, 66, 43, 0.3)',
-          }
-        }
-      }
-    }
-  </script>
+  {{> tailwind}}
   <style>
     * {
       margin: 0;

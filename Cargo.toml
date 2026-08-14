@@ -14,9 +14,14 @@ dotenvy = "0.15"
 envy = "0.3"
 handlebars = "6.4.4"
 redb = "4.1.0"
+tempfile = "3.27.0"
 
 [profile.release]
 opt-level = 'z'
 lto = true
 codegen-units = 1
 strip = 'symbols'
+
+[dev-dependencies]
+http-body-util = "0.1.5"
+tower = { version = "0.5.3", features = ["util"] }

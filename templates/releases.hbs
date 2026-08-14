@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  {{> tailwind}}
+</head>
+<body class="bg-[#0d0d0c] text-[#e0dbd3] min-h-screen p-8 font-mono">
+  <div class="max-w-2xl mx-auto">
+    <div
+      class="inline-flex items-center gap-1.5 bg-primary/10 border border-primary/20 text-primary-foreground text-[10px] font-semibold tracking-[0.2em] uppercase px-4 py-1 rounded shadow-neon mb-4">
+      <span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+      Robo Trek
+    </div>
+    <h1 class="text-2xl font-black tracking-tight mb-6">Releases</h1>
+    <ul class="space-y-3">
+      {{#each releases}}
+      <li>
+        <a href="/dashboard/releases/{{this}}"
+          class="flex items-center gap-2 bg-[#141413]/80 border border-white/10 rounded-lg px-4 py-3 hover:border-primary/40 hover:shadow-neon transition">
+          <span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+          <span>{{this}}</span>
+        </a>
+      </li>
+      {{else}}
+      <li class="text-[#8c877e]">No releases yet.</li>
+      {{/each}}
+    </ul>
+  </div>
+</body>
+</html>

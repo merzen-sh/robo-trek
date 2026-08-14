@@ -1,79 +1,123 @@
 use std::{
     fs,
-    io::Write,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::Command,
-    sync::atomic::{AtomicU64, Ordering},
+    sync::OnceLock,
 };
 
 use handlebars::Handlebars;
+use tempfile::TempDir;
 
-static COUNTER: AtomicU64 = AtomicU64::new(0);
-
-const RELEASE_TEMPLATE: &str = include_str!("../templates/release.hbs");
-const HEAD_TEMPLATE: &str = include_str!("../templates/head.hbs");
-
-fn render_template(name: &str, vars: &[(&str, &str)]) -> Result<String, String> {
-    let mut data = serde_json::Map::new();
-    for (key, val) in vars {
-        data.insert(key.to_string(), serde_json::Value::String(val.to_string()));
-    }
-    let mut reg = Handlebars::new();
-    reg.register_template_string("release", RELEASE_TEMPLATE)
-        .map_err(|e| format!("failed to register template: {e}"))?;
-    reg.register_template_string("head", HEAD_TEMPLATE)
-        .map_err(|e| format!("failed to register partial: {e}"))?;
-    reg.render(name, &data)
-        .map_err(|e| format!("failed to render template: {e}"))
+pub mod template {
+    pub const RELEASE: &str = "release";
+    pub const RELEASES: &str = "releases";
 }
 
+const RELEASE_TEMPLATE: &str = include_str!("../templates/release.hbs");
+const RELEASES_TEMPLATE: &str = include_str!("../templates/releases.hbs");
+const HEAD_TEMPLATE: &str = include_str!("../templates/head.hbs");
+const TAILWIND_TEMPLATE: &str = include_str!("../templates/tailwind.hbs");
+
+const TEMPLATES: [(&str, &str); 4] = [
+    (template::RELEASE, RELEASE_TEMPLATE),
+    (template::RELEASES, RELEASES_TEMPLATE),
+    ("head", HEAD_TEMPLATE),
+    ("tailwind", TAILWIND_TEMPLATE),
+];
+
+fn registry() -> &'static Result<Handlebars<'static>, String> {
+    static REGISTRY: OnceLock<Result<Handlebars<'static>, String>> = OnceLock::new();
+    REGISTRY.get_or_init(|| {
+        let mut reg = Handlebars::new();
+        for (name, source) in TEMPLATES {
+            reg.register_template_string(name, source)
+                .map_err(|e| format!("failed to register template '{name}': {e}"))?;
+        }
+        Ok(reg)
+    })
+}
+
+pub fn render(name: &str, data: &serde_json::Value) -> Result<String, String> {
+    let reg = registry().as_ref().map_err(|e| e.clone())?;
+    reg.render(name, data)
+        .map_err(|e| format!("failed to render template '{name}': {e}"))
+}
+
+const CHROME_CANDIDATES: [&str; 6] = [
+    "/opt/google/chrome/google-chrome",
+    "/usr/bin/google-chrome",
+    "/usr/bin/google-chrome-stable",
+    "/usr/bin/chromium-browser",
+    "/usr/bin/chromium",
+    "/snap/bin/chromium",
+];
+
+const CHROME_NAMES: [&str; 4] = [
+    "google-chrome",
+    "google-chrome-stable",
+    "chromium-browser",
+    "chromium",
+];
+
 fn find_chrome() -> Option<PathBuf> {
-    let candidates = [
-        "/opt/google/chrome/google-chrome",
-        "/usr/bin/google-chrome",
-        "/usr/bin/google-chrome-stable",
-        "/usr/bin/chromium-browser",
-        "/usr/bin/chromium",
-        "/snap/bin/chromium",
-    ];
-    for path in &candidates {
-        let p = PathBuf::from(path);
-        if p.exists() {
-            return Some(p);
-        }
+    CHROME_CANDIDATES
+        .iter()
+        .map(PathBuf::from)
+        .find(|path| path.exists())
+        .or_else(|| CHROME_NAMES.iter().find_map(|name| find_in_path(name)))
+}
+
+fn find_in_path(name: &str) -> Option<PathBuf> {
+    let path = std::env::var_os("PATH")?;
+    std::env::split_paths(&path)
+        .map(|dir| dir.join(name))
+        .find(|candidate| is_executable(candidate))
+}
+
+#[cfg(unix)]
+fn is_executable(path: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    path.is_file()
+        && path
+            .metadata()
+            .map(|m| m.permissions().mode() & 0o111 != 0)
+            .unwrap_or(false)
+}
+
+#[cfg(not(unix))]
+fn is_executable(path: &Path) -> bool {
+    path.is_file()
+}
+
+fn trim_whitespace(raw_path: &Path, trim_path: &Path) -> bool {
+    let raw = raw_path.to_string_lossy();
+    let trimmed = trim_path.to_string_lossy();
+
+    match Command::new("magick")
+        .args(["convert", raw.as_ref(), "-trim", trimmed.as_ref()])
+        .output()
+    {
+        Ok(out) if out.status.success() => true,
+        _ => Command::new("convert")
+            .args([raw.as_ref(), "-trim", trimmed.as_ref()])
+            .output()
+            .map(|out| out.status.success())
+            .unwrap_or(false),
     }
-    for name in &[
-        "google-chrome",
-        "google-chrome-stable",
-        "chromium-browser",
-        "chromium",
-    ] {
-        if let Ok(out) = Command::new("which").arg(name).output() {
-            if out.status.success() {
-                let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                return Some(PathBuf::from(path));
-            }
-        }
-    }
-    None
 }
 
 fn render_html(html: &str) -> Result<Vec<u8>, String> {
-    let id = COUNTER.fetch_add(1, Ordering::Relaxed);
-    let tmp = std::env::temp_dir();
-    let html_path = tmp.join(format!("robo-trek-{id}.html"));
-    let raw_path = tmp.join(format!("robo-trek-{id}.png"));
-    let trim_path = tmp.join(format!("robo-trek-{id}-trimmed.png"));
-
-    let mut f =
-        fs::File::create(&html_path).map_err(|e| format!("failed to create temp html: {e}"))?;
-    f.write_all(html.as_bytes())
-        .map_err(|e| format!("failed to write html: {e}"))?;
-    drop(f);
-
     let chrome = find_chrome().ok_or_else(|| {
         "Chrome/Chromium not found. Install it: sudo apt install chromium-browser".to_string()
     })?;
+
+    let dir = TempDir::new().map_err(|e| format!("failed to create temp dir: {e}"))?;
+    let html_path = dir.path().join("card.html");
+    let raw_path = dir.path().join("card.png");
+    let trim_path = dir.path().join("card-trimmed.png");
+
+    fs::write(&html_path, html.as_bytes())
+        .map_err(|e| format!("failed to write html: {e}"))?;
 
     let output = Command::new(&chrome)
         .args([
@@ -86,50 +130,64 @@ fn render_html(html: &str) -> Result<Vec<u8>, String> {
         .output()
         .map_err(|e| format!("failed to launch {}: {e}", chrome.display()))?;
 
-    let _ = fs::remove_file(&html_path);
-
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        let _ = fs::remove_file(&raw_path);
         return Err(format!("Chrome exited with error:\n{stderr}"));
     }
 
-    let trim_result = Command::new("magick")
-        .args([
-            "convert",
-            &raw_path.to_string_lossy(),
-            "-trim",
-            &trim_path.to_string_lossy(),
-        ])
-        .output()
-        .or_else(|_| {
-            Command::new("convert")
-                .args([
-                    &raw_path.to_string_lossy(),
-                    "-trim",
-                    &trim_path.to_string_lossy(),
-                ])
-                .output()
-        });
-
-    let final_path = match trim_result {
-        Ok(out) if out.status.success() => {
-            let _ = fs::remove_file(&raw_path);
-            trim_path
-        }
-        _ => {
-            let _ = fs::remove_file(&trim_path);
-            raw_path
-        }
+    let final_path = if trim_whitespace(&raw_path, &trim_path) {
+        trim_path
+    } else {
+        raw_path
     };
 
-    let png = fs::read(&final_path).map_err(|e| format!("failed to read screenshot: {e}"))?;
-    let _ = fs::remove_file(&final_path);
-
-    Ok(png)
+    fs::read(&final_path).map_err(|e| format!("failed to read screenshot: {e}"))
 }
 
 pub fn release_card(version: &str) -> Result<Vec<u8>, String> {
-    let html = render_template("release", &[("version", version)])?;
+    let data = serde_json::json!({ "version": version });
+    let html = render(template::RELEASE, &data)?;
     render_html(&html)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn registry_initialized_once() {
+        let first = registry();
+        let second = registry();
+        assert!(std::ptr::eq(first, second));
+    }
+
+    #[test]
+    fn release_template_substitutes_version() {
+        let html = render(template::RELEASE, &serde_json::json!({"version": "v1.2.3"})).unwrap();
+        assert!(html.contains("v1.2.3"));
+        assert!(!html.contains("{{version}}"));
+    }
+
+    #[test]
+    fn releases_page_renders_list_and_links() {
+        let html = render(
+            template::RELEASES,
+            &serde_json::json!({"releases": ["v1.0.0", "v2.0.0"]}),
+        )
+        .unwrap();
+        assert!(html.contains("v1.0.0"));
+        assert!(html.contains("v2.0.0"));
+        assert!(html.contains("/dashboard/releases/v1.0.0"));
+    }
+
+    #[test]
+    fn releases_page_renders_empty_state() {
+        let html = render(template::RELEASES, &serde_json::json!({"releases": []})).unwrap();
+        assert!(html.contains("No releases yet"));
+    }
+
+    #[test]
+    fn render_unknown_template_errors() {
+        assert!(render("does-not-exist", &serde_json::json!({})).is_err());
+    }
 }
