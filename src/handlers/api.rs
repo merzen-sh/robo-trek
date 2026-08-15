@@ -20,7 +20,8 @@ pub struct PingResponse {
 
 #[derive(Deserialize)]
 pub struct WebhookRelease {
-    pub version: String,
+    pub title: String,
+    pub content: String,
 }
 
 pub async fn health_handle() -> Json<HealthResponse> {
@@ -43,7 +44,8 @@ pub async fn release_webhook_handle(
     state
         .task_tx
         .send(worker::Task::Release {
-            version: req.version,
+            title: req.title,
+            content: req.content
         })
         .await
         .map_err(|e| internal(format!("failed to queue release: {e}")))?;
@@ -70,12 +72,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn release_webhook_handle_queues_version() {
+    async fn release_webhook_handle_queues_title_content() {
         let (state, mut rx) = test_state("webhook").await;
         let resp = release_webhook_handle(
             State(state),
             Json(WebhookRelease {
-                version: "v3.0.0".into(),
+                title: "New Release".into(),
+                content: "v3.0.0".into()
             }),
         )
         .await
@@ -84,7 +87,8 @@ mod tests {
         assert_eq!(
             rx.try_recv().unwrap(),
             worker::Task::Release {
-                version: "v3.0.0".into()
+                title: "New Release".into(),
+                content: "v3.0.0".into()
             }
         );
     }

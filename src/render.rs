@@ -182,8 +182,8 @@ fn render_html(html: &str) -> Result<Vec<u8>, String> {
     fs::read(&final_path).map_err(|e| format!("failed to read screenshot: {e}"))
 }
 
-pub fn release_card(version: &str) -> Result<Vec<u8>, String> {
-    let data = serde_json::json!({ "version": version });
+pub fn release_card(title: &str, content: &str) -> Result<Vec<u8>, String> {
+    let data = serde_json::json!({ "title": title,"content": content });
     let html = render(template::RELEASE, &data)?;
     render_html(&html)
 }
@@ -200,10 +200,17 @@ mod tests {
     }
 
     #[test]
-    fn release_template_substitutes_version() {
-        let html = render(template::RELEASE, &serde_json::json!({"version": "v1.2.3"})).unwrap();
+    fn release_template_substitutes_title() {
+        let html = render(template::RELEASE, &serde_json::json!({"title": "New Release"})).unwrap();
+        assert!(html.contains("New Release"));
+        assert!(!html.contains("{{title}}"));
+    }
+
+    #[test]
+    fn release_template_substitutes_content() {
+        let html = render(template::RELEASE, &serde_json::json!({"content": "v1.2.3"})).unwrap();
         assert!(html.contains("v1.2.3"));
-        assert!(!html.contains("{{version}}"));
+        assert!(!html.contains("{{content}}"));
     }
 
     #[test]

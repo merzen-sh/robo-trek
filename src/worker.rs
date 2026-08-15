@@ -12,7 +12,7 @@ use crate::{render, storages::releases::ReleaseStore};
 /// in `process`) for each new task type; the worker loop dispatches on it.
 #[derive(Debug, PartialEq)]
 pub enum Task {
-    Release { version: String },
+    Release { title: String, content: String },
 }
 
 /// Shared dependencies every task handler may need. Clone to pass around.
@@ -52,18 +52,19 @@ pub fn spawn(
 
 async fn process(task: &Task, state: &WorkerState) -> Result<(), String> {
     match task {
-        Task::Release { version } => process_release(version, state).await,
+        Task::Release { title, content } => process_release(title, content, state).await,
     }
 }
 
 /// Renders the release card, caches it in SQLite, and posts it to Discord.
 /// Rendering via Headless Chrome and caching are CPU/IO bound, so they run
 /// inside `spawn_blocking`; the Discord send stays on the async runtime.
-async fn process_release(version: &str, state: &WorkerState) -> Result<(), String> {
+async fn process_release(title: &str,version: &str, state: &WorkerState) -> Result<(), String> {
+    let title = title.to_string();
     let version = version.to_string();
     let render_version = version.clone();
 
-    let png = tokio::task::spawn_blocking(move || render::release_card(&render_version))
+    let png = tokio::task::spawn_blocking(move || render::release_card(&title,&render_version))
         .await
         .map_err(|e| format!("render task failed: {e}"))??;
 
