@@ -45,7 +45,7 @@ pub async fn release_webhook_handle(
         .task_tx
         .send(worker::Task::Release {
             title: req.title,
-            content: req.content
+            content: req.content,
         })
         .await
         .map_err(|e| internal(format!("failed to queue release: {e}")))?;
@@ -78,7 +78,7 @@ mod tests {
             State(state),
             Json(WebhookRelease {
                 title: "New Release".into(),
-                content: "v3.0.0".into()
+                content: "v3.0.0".into(),
             }),
         )
         .await

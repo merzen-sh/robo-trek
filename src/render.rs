@@ -201,7 +201,11 @@ mod tests {
 
     #[test]
     fn release_template_substitutes_title() {
-        let html = render(template::RELEASE, &serde_json::json!({"title": "New Release"})).unwrap();
+        let html = render(
+            template::RELEASE,
+            &serde_json::json!({"title": "New Release"}),
+        )
+        .unwrap();
         assert!(html.contains("New Release"));
         assert!(!html.contains("{{title}}"));
     }
