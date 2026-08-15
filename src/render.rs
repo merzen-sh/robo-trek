@@ -123,11 +123,6 @@ fn is_executable(path: &Path) -> bool {
             .unwrap_or(false)
 }
 
-#[cfg(not(unix))]
-fn is_executable(path: &Path) -> bool {
-    path.is_file()
-}
-
 fn trim_whitespace(raw_path: &Path, trim_path: &Path) -> bool {
     let raw = raw_path.to_string_lossy();
     let trimmed = trim_path.to_string_lossy();
