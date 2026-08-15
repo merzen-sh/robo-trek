@@ -4,7 +4,7 @@ use redb::{
     Database, ReadableDatabase, ReadableTable, ReadableTableMetadata, TableDefinition, TableHandle,
 };
 
-const RELEASES: TableDefinition<&str, &[u8]> = TableDefinition::new("releases");
+const METRICS: TableDefinition<u64, &[u8]> = TableDefinition::new("metrics");
 
 fn main() -> Result<(), String> {
     let path = env::args()
@@ -20,10 +20,10 @@ fn main() -> Result<(), String> {
         println!("  {}", table.name());
     }
 
-    let table = tx.open_table(RELEASES).map_err(|e| e.to_string())?;
+    let table = tx.open_table(METRICS).map_err(|e| e.to_string())?;
 
     println!(
-        "\nreleases ({} entries):",
+        "\nmetrics ({} entries):",
         table.len().map_err(|e| e.to_string())?
     );
     for entry in table.iter().map_err(|e| e.to_string())? {
