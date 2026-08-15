@@ -24,19 +24,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let http = client.http.clone();
     let channel_id = ChannelId::new(config.discord_release_channel_id);
 
-    // Bounded queue gives backpressure when the worker falls behind.
-    let (release_tx, release_rx) = tokio::sync::mpsc::channel(64);
-
-    let state = Arc::new(AppState {
-        release_tx,
-        config: Arc::clone(&config),
-        kv: kv.clone(),
-        db: db.clone(),
-        tickets,
-        metrics_history: Arc::new(Mutex::new(metrics::MetricsHistory::new(60))),
-    });
-
-    let worker_task = worker::spawn(release_rx, http, channel_id, kv.clone());
+    let (state, task_rx) = AppState::new(
+        Arc::clone(&config),
+        kv.clone(),
+        db,
+        Arc::new(Mutex::new(metrics::MetricsHistory::new(60))),
+    );
+    let state = Arc::new(state);
+    let worker_state = worker::WorkerState::new(http, channel_id, state.releases.clone());
+    let worker_task = worker::spawn(task_rx, worker_state);
     let sampler_task = metrics::spawn_sampler(kv, state.metrics_history.clone());
     let api_task = tokio::spawn(api::serve(state));
     let shard_manager = client.shard_manager.clone();

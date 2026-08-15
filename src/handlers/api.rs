@@ -3,7 +3,7 @@ use std::sync::Arc;
 use axum::{Json, extract::State, http::StatusCode};
 use serde::{Deserialize, Serialize};
 
-use crate::AppState;
+use crate::{AppState, worker};
 
 use super::{ErrorResponse, internal};
 
@@ -41,8 +41,10 @@ pub async fn release_webhook_handle(
     Json(req): Json<WebhookRelease>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
     state
-        .release_tx
-        .send(req.version)
+        .task_tx
+        .send(worker::Task::Release {
+            version: req.version,
+        })
         .await
         .map_err(|e| internal(format!("failed to queue release: {e}")))?;
 
@@ -79,6 +81,11 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(resp.0, serde_json::json!({"status": "ok"}));
-        assert_eq!(rx.try_recv().unwrap(), "v3.0.0");
+        assert_eq!(
+            rx.try_recv().unwrap(),
+            worker::Task::Release {
+                version: "v3.0.0".into()
+            }
+        );
     }
 }

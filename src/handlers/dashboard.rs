@@ -16,7 +16,11 @@ use super::{ErrorResponse, internal};
 pub async fn releases_page_handle(
     State(state): State<Arc<AppState>>,
 ) -> Result<Html<String>, (StatusCode, Json<ErrorResponse>)> {
-    let versions = state.kv.list_releases().await.map_err(internal)?;
+    let versions = state
+        .releases
+        .list_releases()
+        .await
+        .map_err(|e| internal(e.to_string()))?;
     let data = serde_json::json!({ "active": "releases", "releases": versions });
     let html = render::render(render::template::RELEASES, &data).map_err(internal)?;
     Ok(Html(html))
@@ -161,7 +165,7 @@ pub async fn release_image_handle(
     State(state): State<Arc<AppState>>,
     Path(version): Path<String>,
 ) -> Result<Response, (StatusCode, Json<ErrorResponse>)> {
-    match state.kv.get_release(&version).await {
+    match state.releases.get_release(&version).await {
         Ok(Some(png)) => Response::builder()
             .header(CONTENT_TYPE, "image/png")
             .body(Body::from(png))
@@ -172,7 +176,7 @@ pub async fn release_image_handle(
                 error: format!("release {version} not found"),
             }),
         )),
-        Err(e) => Err(internal(e)),
+        Err(e) => Err(internal(e.to_string())),
     }
 }
 
@@ -200,7 +204,7 @@ mod tests {
     #[tokio::test]
     async fn releases_page_handle_lists_cached_versions() {
         let (state, _rx) = test_state("page").await;
-        state.kv.put_release("v1.0.0", b"png").await.unwrap();
+        state.releases.put_release("v1.0.0", b"png").await.unwrap();
         let Html(html) = releases_page_handle(State(state)).await.unwrap();
         assert!(html.contains("v1.0.0"));
     }
@@ -215,7 +219,11 @@ mod tests {
     #[tokio::test]
     async fn release_image_handle_serves_png() {
         let (state, _rx) = test_state("img").await;
-        state.kv.put_release("v1.0.0", b"png-data").await.unwrap();
+        state
+            .releases
+            .put_release("v1.0.0", b"png-data")
+            .await
+            .unwrap();
         let resp = release_image_handle(State(state), Path("v1.0.0".into()))
             .await
             .unwrap();
