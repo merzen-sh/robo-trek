@@ -32,35 +32,56 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     let state = Arc::new(state);
     let worker_state = worker::WorkerState::new(http, channel_id, state.releases.clone());
+
+    // Spawning Services
     let worker_task = worker::spawn(task_rx, worker_state);
     let sampler_task = metrics::spawn_sampler(kv, state.metrics_history.clone());
     let api_task = tokio::spawn(api::serve(state));
+
+    // Monitoring Background Tasks (Isolation Phase)
+    let api_monitor = tokio::spawn(async move {
+        match api_task.await {
+            Ok(Ok(())) => eprintln!("[Warning] API server stopped cleanly"),
+            Ok(Err(e)) => eprintln!("[Error] API server error: {e}"),
+            Err(e) => eprintln!("[Panic] API server task panicked: {e}"),
+        }
+    });
+
+    let worker_monitor = tokio::spawn(async move {
+        match worker_task.await {
+            Ok(()) => eprintln!("[Warning] Release worker stopped cleanly"),
+            Err(e) => eprintln!("[Panic] Release worker task panicked: {e}"),
+        }
+    });
+
+    let sampler_monitor = tokio::spawn(async move {
+        match sampler_task.await {
+            Ok(()) => eprintln!("[Warning] Metrics sampler stopped cleanly"),
+            Err(e) => eprintln!("[Panic] Metrics sampler task panicked: {e}"),
+        }
+    });
+
     let shard_manager = client.shard_manager.clone();
     let started = client.start();
 
+    // Main Critical Loop
     tokio::select! {
-        result = api_task => match result {
-            Ok(Ok(())) => println!("API server stopped"),
-            Ok(Err(e)) => eprintln!("API server error: {e}"),
-            Err(e) => eprintln!("API server task panicked: {e}"),
-        },
         result = started => match result {
-            Ok(()) => println!("Discord client stopped"),
-            Err(e) => eprintln!("Discord client error: {e:?}"),
-        },
-        result = worker_task => match result {
-            Ok(()) => println!("release worker stopped"),
-            Err(e) => eprintln!("release worker panicked: {e}"),
-        },
-        result = sampler_task => match result {
-            Ok(()) => println!("metrics sampler stopped"),
-            Err(e) => eprintln!("metrics sampler panicked: {e}"),
+            Ok(()) => println!("[System] Discord client stopped"),
+            Err(e) => eprintln!("[System Error] Discord client error: {e:?}"),
         },
         _ = shutdown_signal() => {
-            println!("shutting down");
-            shard_manager.shutdown_all().await;
+            println!("[System] Shutting down via signal");
         }
     }
+
+    // Teardown
+    println!("[System] Cleaning up resources...");
+    shard_manager.shutdown_all().await;
+
+    api_monitor.abort();
+    worker_monitor.abort();
+    sampler_monitor.abort();
 
     Ok(())
 }
