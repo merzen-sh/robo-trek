@@ -3,8 +3,7 @@ use std::{net::SocketAddr, sync::Arc};
 use crate::{AppState, routes};
 use tracing::info;
 
-/// Serves the API, returning a bind/serve error instead of panicking.
-/// Shuts down gracefully on Ctrl-C so in-flight requests can finish.
+/// Serves the API, shutting down gracefully on Ctrl-C.
 pub async fn serve(state: Arc<AppState>) -> Result<(), std::io::Error> {
     let app = routes::router(state.clone());
 
@@ -17,6 +16,6 @@ pub async fn serve(state: Arc<AppState>) -> Result<(), std::io::Error> {
         .await
 }
 
-async fn shutdown_signal() {
+pub async fn shutdown_signal() {
     let _ = tokio::signal::ctrl_c().await;
 }

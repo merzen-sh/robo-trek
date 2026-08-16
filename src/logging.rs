@@ -2,8 +2,7 @@ use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitEx
 
 use crate::config;
 
-/// Configures global tracing. The level comes from `LOG_LEVEL` (or `RUST_LOG`
-/// if set); every emitted event is also counted into the Prometheus registry.
+/// Configures global tracing; the level comes from `LOG_LEVEL` (or `RUST_LOG`).
 pub fn init_tracing(config: &config::Config) {
     let default = config
         .log_level

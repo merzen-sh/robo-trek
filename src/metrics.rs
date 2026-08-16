@@ -1,6 +1,7 @@
-use crate::prometheus::Metrics;
 use std::{sync::Arc, time::Duration};
 use tracing::error;
+
+use crate::prometheus::{HostSample, Metrics};
 
 #[derive(Clone)]
 pub struct CpuTimes {
@@ -20,15 +21,19 @@ pub fn read_cpu_times() -> Result<CpuTimes, String> {
 }
 
 fn parse_cpu_times(contents: &str) -> Option<CpuTimes> {
-    let fields: Vec<u64> = contents
+    // Single pass over the token stream: sum every field for the total while
+    // capturing the idle fields (indexes 3 and 4) by position. No heap
+    // allocation, unlike collecting into a Vec first.
+    let (total, idle) = contents
         .lines()
         .next()?
         .split_whitespace()
         .skip(1)
-        .filter_map(|f| f.parse().ok())
-        .collect();
-    let total = fields.iter().sum::<u64>();
-    let idle = fields.get(3).copied().unwrap_or(0) + fields.get(4).copied().unwrap_or(0);
+        .filter_map(|f| f.parse::<u64>().ok())
+        .enumerate()
+        .fold((0u64, 0u64), |(total, idle), (i, v)| {
+            (total + v, if i == 3 || i == 4 { idle + v } else { idle })
+        });
     Some(CpuTimes { total, idle })
 }
 
@@ -80,28 +85,25 @@ async fn sample_cpu_percent() -> Result<f64, String> {
     Ok(cpu_percent(&prev, &now))
 }
 
-async fn sample() -> Result<(f64, f64, u64, u64), String> {
+async fn sample() -> Result<HostSample, String> {
     let cpu = sample_cpu_percent().await?;
     let mem = read_mem()?;
-    Ok((
-        cpu,
-        mem_percent(&mem),
-        mem.total_kb.saturating_sub(mem.available_kb),
-        mem.total_kb,
-    ))
+    Ok(HostSample {
+        cpu_percent: cpu,
+        mem_percent: mem_percent(&mem),
+        mem_used_kb: mem.total_kb.saturating_sub(mem.available_kb),
+        mem_total_kb: mem.total_kb,
+    })
 }
 
 const SAMPLE_INTERVAL: Duration = Duration::from_secs(2);
 
-/// Continuously samples CPU/memory and updates the Prometheus gauges, which a
-/// Prometheus server scrapes for long-term host monitoring (Grafana).
+/// Continuously samples CPU/memory into the Prometheus gauges.
 pub fn spawn_sampler(metrics: Arc<Metrics>) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         loop {
             match sample().await {
-                Ok((cpu, mem_percent, mem_used_kb, mem_total_kb)) => {
-                    metrics.record(cpu, mem_percent, mem_used_kb, mem_total_kb);
-                }
+                Ok(sample) => metrics.record(&sample),
                 Err(e) => error!("metrics sampler error: {e}"),
             }
             tokio::time::sleep(SAMPLE_INTERVAL).await;

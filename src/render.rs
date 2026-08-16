@@ -47,14 +47,8 @@ impl HelperDef for EqHelper {
         _rc: &mut RenderContext<'reg, 'rc>,
         out: &mut dyn Output,
     ) -> HelperResult {
-        let a = h
-            .param(0)
-            .map(|p| p.value())
-            .unwrap_or(&serde_json::Value::Null);
-        let b = h
-            .param(1)
-            .map(|p| p.value())
-            .unwrap_or(&serde_json::Value::Null);
+        let a = h.param(0).map_or(&serde_json::Value::Null, |p| p.value());
+        let b = h.param(1).map_or(&serde_json::Value::Null, |p| p.value());
         out.write(&(a == b).to_string())?;
         Ok(())
     }

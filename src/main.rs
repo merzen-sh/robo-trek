@@ -6,13 +6,10 @@ use robo_trek::{
 use serenity::{model::id::ChannelId, prelude::*};
 use tracing::{error, info, warn};
 
-// Multi-threaded runtime: the Discord gateway, the API server, and the
-// release worker all run concurrently, while Headless Chrome rendering is
-// isolated on Tokio's blocking pool.
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Arc::new(config::Config::from_env()?);
-    let metrics = Arc::new(prometheus::Metrics::new());
+    let metrics = Arc::new(prometheus::Metrics::new()?);
     logging::init_tracing(&config);
 
     let db = db::Db::open("robo-trek.sqlite").await?;
@@ -33,12 +30,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let state = Arc::new(state);
     let worker_state = worker::WorkerState::new(http, channel_id, state.releases.clone());
 
-    // Spawning Services
     let worker_task = worker::spawn(task_rx, worker_state);
     let sampler_task = metrics::spawn_sampler(state.prometheus.clone());
     let api_task = tokio::spawn(api::serve(state));
 
-    // Monitoring Background Tasks (Isolation Phase)
     let api_monitor = tokio::spawn(async move {
         match api_task.await {
             Ok(Ok(())) => warn!("API server stopped cleanly"),
@@ -64,18 +59,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let shard_manager = client.shard_manager.clone();
     let started = client.start();
 
-    // Main Critical Loop
     tokio::select! {
         result = started => match result {
             Ok(()) => info!("Discord client stopped"),
             Err(e) => error!("Discord client error: {e:?}"),
         },
-        _ = shutdown_signal() => {
-            info!("Shutting down via signal");
-        }
+        _ = api::shutdown_signal() => info!("Shutting down via signal"),
     }
 
-    // Teardown
     info!("Cleaning up resources...");
     shard_manager.shutdown_all().await;
 
@@ -84,8 +75,4 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     sampler_monitor.abort();
 
     Ok(())
-}
-
-async fn shutdown_signal() {
-    let _ = tokio::signal::ctrl_c().await;
 }

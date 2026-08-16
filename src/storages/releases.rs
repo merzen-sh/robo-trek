@@ -10,18 +10,6 @@ impl ReleaseStore {
         Self { db }
     }
 
-    /// Opens a standalone store over its own SQLite file. Only used by the
-    /// unit tests below; production shares one `db::Db` via `ReleaseStore::new`.
-    pub async fn open(path: &str) -> Result<Self, sqlx::Error> {
-        Ok(Self::new(db::Db::open(path).await?))
-    }
-
-    /// Opens a standalone store over a throwaway SQLite file in a temp dir.
-    /// Only used by the unit tests below; production shares one `db::Db`.
-    pub async fn open_in_memory() -> Result<Self, sqlx::Error> {
-        Ok(Self::new(db::Db::open_in_memory().await?))
-    }
-
     pub async fn put_release(&self, version: &str, png: &[u8]) -> Result<(), sqlx::Error> {
         sqlx::query(
             "INSERT INTO releases (version, png) VALUES (?1, ?2)
@@ -56,7 +44,7 @@ mod tests {
 
     #[tokio::test]
     async fn put_get_roundtrip() {
-        let store = ReleaseStore::open_in_memory().await.unwrap();
+        let store = ReleaseStore::new(db::Db::open_in_memory().await.unwrap());
         store.put_release("v1.0.0", b"release-png").await.unwrap();
         assert_eq!(
             store.get_release("v1.0.0").await.unwrap(),
@@ -66,13 +54,13 @@ mod tests {
 
     #[tokio::test]
     async fn get_missing_returns_none() {
-        let store = ReleaseStore::open_in_memory().await.unwrap();
+        let store = ReleaseStore::new(db::Db::open_in_memory().await.unwrap());
         assert_eq!(store.get_release("v9.9.9").await.unwrap(), None);
     }
 
     #[tokio::test]
     async fn list_releases_sorts_versions() {
-        let store = ReleaseStore::open_in_memory().await.unwrap();
+        let store = ReleaseStore::new(db::Db::open_in_memory().await.unwrap());
         store.put_release("v2.0.0", b"b").await.unwrap();
         store.put_release("v1.0.0", b"a").await.unwrap();
         let versions = store.list_releases().await.unwrap();
@@ -81,7 +69,7 @@ mod tests {
 
     #[tokio::test]
     async fn put_release_overwrites_existing() {
-        let store = ReleaseStore::open_in_memory().await.unwrap();
+        let store = ReleaseStore::new(db::Db::open_in_memory().await.unwrap());
         store.put_release("v1.0.0", b"old").await.unwrap();
         store.put_release("v1.0.0", b"new").await.unwrap();
         assert_eq!(
@@ -99,10 +87,10 @@ mod tests {
         );
         let _ = std::fs::remove_file(&path);
         {
-            let store = ReleaseStore::open(&path).await.unwrap();
+            let store = ReleaseStore::new(db::Db::open(&path).await.unwrap());
             store.put_release("v1.0.0", b"png").await.unwrap();
         }
-        let store = ReleaseStore::open(&path).await.unwrap();
+        let store = ReleaseStore::new(db::Db::open(&path).await.unwrap());
         assert_eq!(
             store.get_release("v1.0.0").await.unwrap(),
             Some(b"png".to_vec())

@@ -1,8 +1,6 @@
-use ::prometheus::{Encoder, Gauge, Registry, TextEncoder};
+use ::prometheus::{Encoder, Error, Gauge, Registry, TextEncoder};
 
-/// Prometheus registry and gauges backing long-term host metrics. Samples are
-/// recorded by the metrics sampler and scraped by a Prometheus server, which
-/// stores the history for Grafana.
+/// Host metrics exposed to Prometheus for scraping.
 pub struct Metrics {
     registry: Registry,
     cpu_percent: Gauge,
@@ -11,49 +9,48 @@ pub struct Metrics {
     mem_total_bytes: Gauge,
 }
 
-impl Default for Metrics {
-    fn default() -> Self {
-        Self::new()
-    }
+/// A single CPU/memory sample recorded into the gauges.
+pub struct HostSample {
+    pub cpu_percent: f64,
+    pub mem_percent: f64,
+    pub mem_used_kb: u64,
+    pub mem_total_kb: u64,
 }
 
 impl Metrics {
-    pub fn new() -> Self {
+    pub fn new() -> Result<Self, Error> {
         let registry = Registry::new();
-        let cpu_percent =
-            Gauge::new("robo_trek_cpu_percent", "Host CPU usage percent").expect("gauge");
-        let mem_percent =
-            Gauge::new("robo_trek_memory_percent", "Host memory usage percent").expect("gauge");
+        let cpu_percent = Gauge::new("robo_trek_cpu_percent", "Host CPU usage percent")?;
+        let mem_percent = Gauge::new("robo_trek_memory_percent", "Host memory usage percent")?;
         let mem_used_bytes =
-            Gauge::new("robo_trek_memory_used_bytes", "Host memory in use in bytes")
-                .expect("gauge");
+            Gauge::new("robo_trek_memory_used_bytes", "Host memory in use in bytes")?;
         let mem_total_bytes =
-            Gauge::new("robo_trek_memory_total_bytes", "Host total memory in bytes")
-                .expect("gauge");
+            Gauge::new("robo_trek_memory_total_bytes", "Host total memory in bytes")?;
         for gauge in [
             Box::new(cpu_percent.clone()),
             Box::new(mem_percent.clone()),
             Box::new(mem_used_bytes.clone()),
             Box::new(mem_total_bytes.clone()),
         ] {
-            registry.register(gauge).expect("register gauge");
+            registry.register(gauge)?;
         }
-        Self {
+        Ok(Self {
             registry,
             cpu_percent,
             mem_percent,
             mem_used_bytes,
             mem_total_bytes,
-        }
+        })
     }
 
-    /// Records the latest sample into the gauges; Prometheus scrapes whatever
-    /// is current, so no per-minute aggregation is needed.
-    pub fn record(&self, cpu: f64, mem: f64, mem_used_kb: u64, mem_total_kb: u64) {
-        self.cpu_percent.set(cpu);
-        self.mem_percent.set(mem);
-        self.mem_used_bytes.set(mem_used_kb as f64 * 1024.0);
-        self.mem_total_bytes.set(mem_total_kb as f64 * 1024.0);
+    /// Records the latest sample; Prometheus scrapes whatever is current, so
+    /// no per-minute aggregation is needed.
+    pub fn record(&self, sample: &HostSample) {
+        self.cpu_percent.set(sample.cpu_percent);
+        self.mem_percent.set(sample.mem_percent);
+        self.mem_used_bytes.set(sample.mem_used_kb as f64 * 1024.0);
+        self.mem_total_bytes
+            .set(sample.mem_total_kb as f64 * 1024.0);
     }
 
     /// Renders the Prometheus text exposition format for scraping.

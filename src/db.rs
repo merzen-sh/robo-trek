@@ -4,8 +4,7 @@ use sqlx::SqlitePool;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use tempfile::TempDir;
 
-/// Application SQL database (SQLite). A single shared pool backed by one file,
-/// so every store can reach every table. Clone to pass around.
+/// Shared SQLite connection pool.
 #[derive(Clone)]
 pub struct Db {
     pool: SqlitePool,
@@ -44,7 +43,6 @@ impl Db {
         })
     }
 
-    /// Shared connection pool; stores run queries against it.
     pub fn pool(&self) -> &SqlitePool {
         &self.pool
     }

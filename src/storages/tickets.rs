@@ -2,9 +2,9 @@ use crate::db;
 use crate::models::ticket::Ticket;
 
 #[derive(Default, Clone)]
-pub struct TicketFilters {
-    pub status: Option<String>,
-    pub search: Option<String>,
+pub struct TicketFilters<'a> {
+    pub status: Option<&'a str>,
+    pub search: Option<&'a str>,
 }
 
 #[derive(Clone)]
@@ -15,18 +15,6 @@ pub struct TicketStore {
 impl TicketStore {
     pub fn new(db: db::Db) -> Self {
         Self { db }
-    }
-
-    /// Opens a standalone store over its own SQLite file. Only used by the
-    /// unit tests below; production shares one `db::Db` via `TicketStore::new`.
-    pub async fn open(path: &str) -> Result<Self, sqlx::Error> {
-        Ok(Self::new(db::Db::open(path).await?))
-    }
-
-    /// Opens a standalone store over a throwaway SQLite file in a temp dir.
-    /// Only used by the unit tests below; production shares one `db::Db`.
-    pub async fn open_in_memory() -> Result<Self, sqlx::Error> {
-        Ok(Self::new(db::Db::open_in_memory().await?))
     }
 
     pub async fn create_ticket(
@@ -78,7 +66,7 @@ impl TicketStore {
 
     pub const PAGE_SIZE: i64 = 10;
 
-    fn push_filters(builder: &mut sqlx::QueryBuilder<sqlx::Sqlite>, filters: &TicketFilters) {
+    fn push_filters(builder: &mut sqlx::QueryBuilder<sqlx::Sqlite>, filters: &TicketFilters<'_>) {
         let mut clause = false;
         if let Some(status) = &filters.status {
             builder.push(" WHERE status = ");
@@ -97,7 +85,7 @@ impl TicketStore {
         }
     }
 
-    pub async fn count_tickets(&self, filters: &TicketFilters) -> Result<i64, sqlx::Error> {
+    pub async fn count_tickets(&self, filters: &TicketFilters<'_>) -> Result<i64, sqlx::Error> {
         let mut builder = sqlx::QueryBuilder::new("SELECT COUNT(*) FROM tickets");
         Self::push_filters(&mut builder, filters);
         builder.build_query_scalar().fetch_one(self.db.pool()).await
@@ -106,8 +94,9 @@ impl TicketStore {
     pub async fn list_tickets_page(
         &self,
         page: i64,
-        filters: &TicketFilters,
+        filters: &TicketFilters<'_>,
     ) -> Result<Vec<Ticket>, sqlx::Error> {
+        let page = page.max(1);
         let mut builder = sqlx::QueryBuilder::new(
             "SELECT id, guild_id, channel_id, user_id, username, subject, description, status, \
              opened_at, updated_at, closed_at, closed_by FROM tickets",
@@ -179,7 +168,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_and_fetch_ticket() {
-        let store = TicketStore::open_in_memory().await.unwrap();
+        let store = TicketStore::new(db::Db::open_in_memory().await.unwrap());
         let ticket = store
             .create_ticket("guild", "u1", "mark", "Broken thing", "It broke")
             .await
@@ -200,7 +189,7 @@ mod tests {
 
     #[tokio::test]
     async fn list_orders_open_first() {
-        let store = TicketStore::open_in_memory().await.unwrap();
+        let store = TicketStore::new(db::Db::open_in_memory().await.unwrap());
         let open = store
             .create_ticket("g", "u1", "a", "Open one", "")
             .await
@@ -219,7 +208,7 @@ mod tests {
 
     #[tokio::test]
     async fn paged_list_slices_by_page_size() {
-        let store = TicketStore::open_in_memory().await.unwrap();
+        let store = TicketStore::new(db::Db::open_in_memory().await.unwrap());
         let filters = TicketFilters::default();
         for i in 0..25 {
             store
@@ -250,7 +239,7 @@ mod tests {
 
     #[tokio::test]
     async fn filters_status_and_search() {
-        let store = TicketStore::open_in_memory().await.unwrap();
+        let store = TicketStore::new(db::Db::open_in_memory().await.unwrap());
         store
             .create_ticket("g", "u1", "mark", "Server down", "outage")
             .await
@@ -266,7 +255,7 @@ mod tests {
         store.close_ticket(third.id, "staff").await.unwrap();
 
         let open = TicketFilters {
-            status: Some("open".into()),
+            status: Some("open"),
             search: None,
         };
         assert_eq!(store.count_tickets(&open).await.unwrap(), 2);
@@ -281,34 +270,35 @@ mod tests {
 
         let subject = TicketFilters {
             status: None,
-            search: Some("Server".into()),
+            search: Some("Server"),
         };
         assert_eq!(store.count_tickets(&subject).await.unwrap(), 2);
 
         let username = TicketFilters {
             status: None,
-            search: Some("jane".into()),
+            search: Some("jane"),
         };
         let hits = store.list_tickets_page(1, &username).await.unwrap();
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].username, "jane");
 
+        let by_id_str = third.id.to_string();
         let by_id = TicketFilters {
             status: None,
-            search: Some(third.id.to_string()),
+            search: Some(&by_id_str),
         };
         assert_eq!(store.count_tickets(&by_id).await.unwrap(), 1);
 
         let combined = TicketFilters {
-            status: Some("open".into()),
-            search: Some("Server".into()),
+            status: Some("open"),
+            search: Some("Server"),
         };
         assert_eq!(store.count_tickets(&combined).await.unwrap(), 1);
     }
 
     #[tokio::test]
     async fn close_ticket_sets_fields_once() {
-        let store = TicketStore::open_in_memory().await.unwrap();
+        let store = TicketStore::new(db::Db::open_in_memory().await.unwrap());
         let ticket = store
             .create_ticket("g", "u1", "a", "Close me", "details")
             .await
@@ -332,7 +322,7 @@ mod tests {
 
     #[tokio::test]
     async fn set_channel_persists() {
-        let store = TicketStore::open_in_memory().await.unwrap();
+        let store = TicketStore::new(db::Db::open_in_memory().await.unwrap());
         let ticket = store
             .create_ticket("g", "u1", "a", "Thread", "")
             .await
@@ -348,14 +338,14 @@ mod tests {
         let path = dir.path().join("tickets.sqlite");
         let path_str = path.to_str().unwrap();
         let id = {
-            let store = TicketStore::open(path_str).await.unwrap();
+            let store = TicketStore::new(db::Db::open(path_str).await.unwrap());
             store
                 .create_ticket("g", "u1", "a", "Persist", "")
                 .await
                 .unwrap()
                 .id
         };
-        let store = TicketStore::open(path_str).await.unwrap();
+        let store = TicketStore::new(db::Db::open(path_str).await.unwrap());
         let ticket = store.get_ticket(id).await.unwrap().unwrap();
         assert_eq!(ticket.subject, "Persist");
     }

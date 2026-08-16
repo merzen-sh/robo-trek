@@ -4,10 +4,14 @@ use axum::{
     Json,
     body::Body,
     extract::State,
-    http::{StatusCode, header::CONTENT_TYPE},
+    http::{
+        StatusCode,
+        header::{CONTENT_TYPE, HeaderValue},
+    },
     response::{Html, Response},
 };
 
+use crate::storages::tickets::TicketFilters;
 use crate::{AppState, render};
 
 use super::{ErrorResponse, internal};
@@ -20,37 +24,28 @@ pub async fn dashboard_handle(
     Ok(Html(html))
 }
 
-/// Serves the Prometheus text exposition format. Intentionally kept outside
-/// the API-key auth layer so the Prometheus scraper can collect it.
+/// Serves Prometheus metrics outside the auth layer so scrapers can collect them.
 pub async fn prometheus_scrape_handle(State(state): State<Arc<AppState>>) -> Response {
-    Response::builder()
-        .status(StatusCode::OK)
-        .header(CONTENT_TYPE, "text/plain; version=0.0.4; charset=utf-8")
-        .body(Body::from(state.prometheus.render()))
-        .unwrap_or_else(|_| {
-            Response::builder()
-                .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(Body::empty())
-                .unwrap()
-        })
+    let mut response = Response::new(Body::from(state.prometheus.render()));
+    response.headers_mut().insert(
+        CONTENT_TYPE,
+        HeaderValue::from_static("text/plain; version=0.0.4; charset=utf-8"),
+    );
+    response
 }
 
-/// Builds the home page "box stats": ticket counts by status plus the number
-/// of cached releases, each linking to the relevant dashboard page.
+async fn count_tickets(state: &AppState, status: Option<&str>) -> Result<i64, String> {
+    state
+        .tickets
+        .count_tickets(&TicketFilters {
+            status,
+            search: None,
+        })
+        .await
+        .map_err(|e| format!("failed to count tickets: {e}"))
+}
+
 async fn home_stats(state: &AppState) -> Result<serde_json::Value, String> {
-    use crate::storages::tickets::TicketFilters;
-
-    async fn count_tickets(state: &AppState, status: Option<&str>) -> Result<i64, String> {
-        state
-            .tickets
-            .count_tickets(&TicketFilters {
-                status: status.map(str::to_string),
-                search: None,
-            })
-            .await
-            .map_err(|e| format!("failed to count tickets: {e}"))
-    }
-
     let (open, in_progress, closed, total) = tokio::join!(
         count_tickets(state, Some("open")),
         count_tickets(state, Some("in_progress")),

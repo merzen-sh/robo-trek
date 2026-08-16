@@ -5,18 +5,17 @@ use serenity::{
     http::Http,
     model::id::ChannelId,
 };
-
-use crate::{render, storages::releases::ReleaseStore};
 use tracing::error;
 
-/// A unit of work for the background worker. Add a variant here (and a branch
-/// in `process`) for each new task type; the worker loop dispatches on it.
+use crate::{render, storages::releases::ReleaseStore};
+
+/// A unit of work for the background worker.
 #[derive(Debug, PartialEq)]
 pub enum Task {
     Release { title: String, content: String },
 }
 
-/// Shared dependencies every task handler may need. Clone to pass around.
+/// Shared dependencies for task handlers.
 #[derive(Clone)]
 pub struct WorkerState {
     pub http: Arc<Http>,
@@ -34,10 +33,7 @@ impl WorkerState {
     }
 }
 
-/// Spawns the worker loop. Drains tasks from the bounded channel and runs each
-/// through `process` sequentially, so ordering is preserved and backpressure
-/// applies. Returns a `JoinHandle` so the caller can monitor for unexpected
-/// exit.
+/// Spawns the worker loop, processing tasks sequentially as they arrive.
 pub fn spawn(
     mut rx: tokio::sync::mpsc::Receiver<Task>,
     state: WorkerState,
@@ -58,26 +54,24 @@ async fn process(task: &Task, state: &WorkerState) -> Result<(), String> {
 }
 
 /// Renders the release card, caches it in SQLite, and posts it to Discord.
-/// Rendering via Headless Chrome and caching are CPU/IO bound, so they run
-/// inside `spawn_blocking`; the Discord send stays on the async runtime.
-async fn process_release(title: &str, version: &str, state: &WorkerState) -> Result<(), String> {
+async fn process_release(title: &str, content: &str, state: &WorkerState) -> Result<(), String> {
     let title = title.to_string();
-    let version = version.to_string();
-    let render_version = version.clone();
+    let content = content.to_string();
+    let render_content = content.clone();
 
-    let png = tokio::task::spawn_blocking(move || render::release_card(&title, &render_version))
+    let png = tokio::task::spawn_blocking(move || render::release_card(&title, &render_content))
         .await
         .map_err(|e| format!("render task failed: {e}"))??;
 
     state
         .releases
-        .put_release(&version, &png)
+        .put_release(&content, &png)
         .await
         .map_err(|e| format!("failed to cache release: {e}"))?;
 
     let attachment = CreateAttachment::bytes(png, "release.png");
     let msg = CreateMessage::new()
-        .content(format!("Version {version} is out!"))
+        .content(format!("Version {content} is out!"))
         .add_file(attachment);
     state
         .channel_id

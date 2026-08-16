@@ -19,7 +19,7 @@ pub async fn test_state(
             guild_id: 456,
             log_level: "info".into(),
         }),
-        Arc::new(prometheus::Metrics::new()),
+        Arc::new(prometheus::Metrics::new().unwrap()),
         db,
     );
     (Arc::new(state), task_rx)

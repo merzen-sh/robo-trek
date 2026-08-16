@@ -34,13 +34,19 @@ pub struct TicketQuery {
 }
 
 fn percent_encode(s: &str) -> String {
+    use std::fmt::Write as _;
+
     let mut out = String::with_capacity(s.len());
     for b in s.bytes() {
         match b {
             b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
                 out.push(b as char)
             }
-            _ => out.push_str(&format!("%{b:02X}")),
+            // Writing into a String is infallible; the `%XX` escape is produced
+            // in place, avoiding a per-byte `format!` allocation.
+            _ => {
+                let _ = write!(out, "%{b:02X}");
+            }
         }
     }
     out
@@ -52,13 +58,11 @@ async fn tickets_data(
 ) -> Result<serde_json::Value, (StatusCode, Json<ErrorResponse>)> {
     use crate::storages::tickets::TicketFilters;
 
+    // Borrow from the query instead of cloning; the filters only need to live
+    // for the duration of the SQL calls below.
     let filters = TicketFilters {
-        status: query.status.clone().filter(|s| !s.is_empty()),
-        search: query
-            .q
-            .clone()
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty()),
+        status: query.status.as_deref().filter(|s| !s.is_empty()),
+        search: query.q.as_deref().map(str::trim).filter(|s| !s.is_empty()),
     };
     let has_filter = filters.status.is_some() || filters.search.is_some();
 
@@ -75,6 +79,7 @@ async fn tickets_data(
         .list_tickets_page(page, &filters)
         .await
         .map_err(|e| internal(e.to_string()))?;
+    // `collect` on a slice iterator pre-allocates via its exact size hint.
     let rows: Vec<serde_json::Value> = tickets
         .iter()
         .map(|t| {
@@ -98,7 +103,7 @@ async fn tickets_data(
         qstr.push_str(&percent_encode(s));
     }
 
-    let mut pages = Vec::new();
+    let mut pages = Vec::with_capacity(5);
     let start = (page - 2).max(1);
     let end = (page + 2).min(total_pages);
     for n in start..=end {
@@ -117,8 +122,8 @@ async fn tickets_data(
         "next_page": (page + 1).min(total_pages),
         "has_pagination": total_pages > 1,
         "pages": pages,
-        "q": filters.search.clone().unwrap_or_default(),
-        "status": filters.status.clone().unwrap_or_default(),
+        "q": filters.search.unwrap_or(""),
+        "status": filters.status.unwrap_or(""),
         "qstr": qstr,
         "has_filter": has_filter,
     }))
@@ -139,7 +144,7 @@ pub async fn tickets_fragment_handle(
     headers: HeaderMap,
 ) -> Result<Response, (StatusCode, Json<ErrorResponse>)> {
     if !headers.contains_key("hx-request") {
-        let mut parts = Vec::new();
+        let mut parts = Vec::with_capacity(3);
         if let Some(page) = query.page.filter(|p| *p > 1) {
             parts.push(format!("page={page}"));
         }

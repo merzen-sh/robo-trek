@@ -14,8 +14,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .nest("/dashboard", dashboard::router())
         .route_layer(middleware::from_fn_with_state(state.clone(), auth));
 
-    // The Prometheus scrape endpoint stays outside the auth layer so the
-    // scraper can collect it without an API key.
+    // Keep the scrape endpoint outside the auth layer so Prometheus can reach it.
     Router::<Arc<AppState>>::new()
         .route(
             "/prometheus/metrics",
