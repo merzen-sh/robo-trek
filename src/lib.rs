@@ -1,6 +1,3 @@
-use crate::config::Config;
-use std::sync::Arc;
-
 pub mod api;
 pub mod config;
 pub mod db;
@@ -22,19 +19,17 @@ pub mod test_support;
 #[derive(Clone)]
 pub struct AppState {
     pub task_tx: tokio::sync::mpsc::Sender<worker::Task>,
-    pub config: Arc<Config>,
-    pub prometheus: Arc<prometheus::Metrics>,
+    pub config: std::sync::Arc<config::Config>,
+    pub prometheus: std::sync::Arc<prometheus::Metrics>,
     pub db: db::Db,
     pub tickets: storages::tickets::TicketStore,
     pub releases: storages::releases::ReleaseStore,
 }
 
 impl AppState {
-    /// Builds the application state from its backing resources and returns the
-    /// worker queue receiver to hand to `worker::spawn`.
     pub fn new(
-        config: Arc<Config>,
-        prometheus: Arc<prometheus::Metrics>,
+        config: std::sync::Arc<config::Config>,
+        prometheus: std::sync::Arc<prometheus::Metrics>,
         db: db::Db,
     ) -> (Self, tokio::sync::mpsc::Receiver<worker::Task>) {
         let (task_tx, task_rx) = tokio::sync::mpsc::channel(64);
