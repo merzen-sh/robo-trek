@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use robo_trek::{
-    AppState, api, config, db, discord, logging, metrics, prometheus, storages, worker,
+    AppState, api, config, db, discord, logging, metrics, prometheus, shutdown_signal, storages,
+    worker,
 };
 use serenity::{model::id::ChannelId, prelude::*};
 use tracing::{error, info, warn};
@@ -64,7 +65,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(()) => info!("Discord client stopped"),
             Err(e) => error!("Discord client error: {e:?}"),
         },
-        _ = api::shutdown_signal() => info!("Shutting down via signal"),
+        _ = shutdown_signal() => info!("Shutting down via signal"),
     }
 
     info!("Cleaning up resources...");

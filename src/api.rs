@@ -1,6 +1,6 @@
 use std::{net::SocketAddr, sync::Arc};
 
-use crate::{AppState, routes};
+use crate::{AppState, routes, shutdown_signal};
 use tracing::info;
 
 /// Serves the API, shutting down gracefully on Ctrl-C.
@@ -14,8 +14,4 @@ pub async fn serve(state: Arc<AppState>) -> Result<(), std::io::Error> {
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
         .await
-}
-
-pub async fn shutdown_signal() {
-    let _ = tokio::signal::ctrl_c().await;
 }
