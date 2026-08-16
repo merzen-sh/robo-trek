@@ -1,10 +1,6 @@
-use std::{
-    collections::VecDeque,
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 
-use crate::kv;
+use crate::prometheus::Metrics;
 
 #[derive(Clone)]
 pub struct CpuTimes {
@@ -15,58 +11,6 @@ pub struct CpuTimes {
 pub struct Mem {
     pub total_kb: u64,
     pub available_kb: u64,
-}
-
-#[derive(Clone)]
-pub struct Sample {
-    pub ts: u64,
-    pub cpu: f64,
-    pub mem_percent: f64,
-    pub mem_used_kb: u64,
-    pub mem_total_kb: u64,
-}
-
-pub struct MetricsHistory {
-    capacity: usize,
-    samples: VecDeque<Sample>,
-}
-
-pub struct Snapshot {
-    pub labels: Vec<String>,
-    pub cpu: Vec<f64>,
-    pub mem: Vec<f64>,
-}
-
-impl MetricsHistory {
-    pub fn new(capacity: usize) -> Self {
-        Self {
-            capacity,
-            samples: VecDeque::with_capacity(capacity),
-        }
-    }
-
-    pub fn push(&mut self, sample: Sample) {
-        if self.samples.len() == self.capacity {
-            self.samples.pop_front();
-        }
-        self.samples.push_back(sample);
-    }
-
-    pub fn snapshot(&self) -> Snapshot {
-        let mut labels = Vec::with_capacity(self.samples.len());
-        let mut cpu = Vec::with_capacity(self.samples.len());
-        let mut mem = Vec::with_capacity(self.samples.len());
-        for sample in &self.samples {
-            labels.push(format_label(sample.ts));
-            cpu.push(sample.cpu);
-            mem.push(sample.mem_percent);
-        }
-        Snapshot { labels, cpu, mem }
-    }
-
-    pub fn latest(&self) -> Option<&Sample> {
-        self.samples.back()
-    }
 }
 
 pub fn read_cpu_times() -> Result<CpuTimes, String> {
@@ -129,20 +73,6 @@ pub fn mem_percent(mem: &Mem) -> f64 {
     }
 }
 
-pub fn now_secs() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0)
-}
-
-pub fn format_label(secs: u64) -> String {
-    let h = (secs / 3600) % 24;
-    let m = (secs / 60) % 60;
-    let s = secs % 60;
-    format!("{h:02}:{m:02}:{s:02}")
-}
-
 async fn sample_cpu_percent() -> Result<f64, String> {
     let prev = read_cpu_times()?;
     tokio::time::sleep(Duration::from_millis(250)).await;
@@ -150,60 +80,27 @@ async fn sample_cpu_percent() -> Result<f64, String> {
     Ok(cpu_percent(&prev, &now))
 }
 
-async fn sample() -> Result<Sample, String> {
+async fn sample() -> Result<(f64, f64, u64, u64), String> {
     let cpu = sample_cpu_percent().await?;
     let mem = read_mem()?;
-    Ok(Sample {
-        ts: now_secs(),
+    Ok((
         cpu,
-        mem_percent: mem_percent(&mem),
-        mem_used_kb: mem.total_kb.saturating_sub(mem.available_kb),
-        mem_total_kb: mem.total_kb,
-    })
+        mem_percent(&mem),
+        mem.total_kb.saturating_sub(mem.available_kb),
+        mem.total_kb,
+    ))
 }
 
 const SAMPLE_INTERVAL: Duration = Duration::from_secs(2);
-const SAMPLES_PER_FLUSH: u32 = 30;
 
-/// Continuously samples CPU/memory, feeds the in-memory ring buffer (for the
-/// live chart), and persists a per-minute aggregate to redb for long-term
-/// history. Keeps history warm even when the dashboard is closed.
-pub fn spawn_sampler(
-    kv: kv::Kv,
-    history: Arc<Mutex<MetricsHistory>>,
-) -> tokio::task::JoinHandle<()> {
+/// Continuously samples CPU/memory and updates the Prometheus gauges, which a
+/// Prometheus server scrapes for long-term host monitoring (Grafana).
+pub fn spawn_sampler(metrics: Arc<Metrics>) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
-        let mut count = 0u32;
-        let mut cpu_sum = 0.0f64;
-        let mut mem_sum = 0.0f64;
         loop {
             match sample().await {
-                Ok(sample) => {
-                    let cpu = sample.cpu;
-                    let mem_percent = sample.mem_percent;
-                    {
-                        let mut h = history.lock().unwrap_or_else(|p| p.into_inner());
-                        h.push(sample);
-                    }
-
-                    cpu_sum += cpu;
-                    mem_sum += mem_percent;
-                    count += 1;
-                    if count >= SAMPLES_PER_FLUSH {
-                        if let Err(e) = kv
-                            .put_metrics(
-                                now_secs(),
-                                cpu_sum / f64::from(count),
-                                mem_sum / f64::from(count),
-                            )
-                            .await
-                        {
-                            eprintln!("failed to persist metrics: {e}");
-                        }
-                        cpu_sum = 0.0;
-                        mem_sum = 0.0;
-                        count = 0;
-                    }
+                Ok((cpu, mem_percent, mem_used_kb, mem_total_kb)) => {
+                    metrics.record(cpu, mem_percent, mem_used_kb, mem_total_kb);
                 }
                 Err(e) => eprintln!("metrics sampler error: {e}"),
             }
@@ -248,38 +145,5 @@ mod tests {
         assert_eq!(mem.total_kb, 8192000);
         assert_eq!(mem.available_kb, 4096000);
         assert!((mem_percent(&mem) - 50.0).abs() < 0.001);
-    }
-
-    #[test]
-    fn history_keeps_most_recent_samples() {
-        let mut history = MetricsHistory::new(3);
-        history.push(sample_at(1, 10.0, 20.0));
-        history.push(sample_at(2, 30.0, 40.0));
-        history.push(sample_at(3, 50.0, 60.0));
-        history.push(sample_at(4, 70.0, 80.0));
-
-        let snapshot = history.snapshot();
-        assert_eq!(snapshot.cpu, vec![30.0, 50.0, 70.0]);
-        assert_eq!(snapshot.mem, vec![40.0, 60.0, 80.0]);
-        assert_eq!(snapshot.labels.len(), 3);
-        assert!(snapshot.labels[0].len() == 8);
-        assert_eq!(history.latest().map(|s| s.cpu), Some(70.0));
-    }
-
-    fn sample_at(ts: u64, cpu: f64, mem: f64) -> Sample {
-        Sample {
-            ts,
-            cpu,
-            mem_percent: mem,
-            mem_used_kb: 100,
-            mem_total_kb: 200,
-        }
-    }
-
-    #[test]
-    fn formats_timestamp_as_hh_mm_ss() {
-        assert_eq!(format_label(0), "00:00:00");
-        assert_eq!(format_label(86399), "23:59:59");
-        assert_eq!(format_label(3661), "01:01:01");
     }
 }

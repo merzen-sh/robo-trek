@@ -1,6 +1,6 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
-use robo_trek::{AppState, api, config, db, discord, kv, metrics, storages, worker};
+use robo_trek::{AppState, api, config, db, discord, metrics, prometheus, storages, worker};
 use serenity::{model::id::ChannelId, prelude::*};
 
 // Multi-threaded runtime: the Discord gateway, the API server, and the
@@ -9,7 +9,6 @@ use serenity::{model::id::ChannelId, prelude::*};
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Arc::new(config::Config::from_env()?);
-    let kv = kv::Kv::open("robo-trek.redb")?;
     let db = db::Db::open("robo-trek.sqlite").await?;
     let tickets = storages::tickets::TicketStore::new(db.clone());
 
@@ -26,16 +25,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (state, task_rx) = AppState::new(
         Arc::clone(&config),
-        kv.clone(),
+        Arc::new(prometheus::Metrics::new()),
         db,
-        Arc::new(Mutex::new(metrics::MetricsHistory::new(60))),
     );
     let state = Arc::new(state);
     let worker_state = worker::WorkerState::new(http, channel_id, state.releases.clone());
 
     // Spawning Services
     let worker_task = worker::spawn(task_rx, worker_state);
-    let sampler_task = metrics::spawn_sampler(kv, state.metrics_history.clone());
+    let sampler_task = metrics::spawn_sampler(state.prometheus.clone());
     let api_task = tokio::spawn(api::serve(state));
 
     // Monitoring Background Tasks (Isolation Phase)

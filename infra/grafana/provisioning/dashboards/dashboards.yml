@@ -1,0 +1,13 @@
+apiVersion: 1
+
+providers:
+  - name: robo-trek
+    orgId: 1
+    folder: Robo Trek
+    type: file
+    disableDeletion: true
+    updateIntervalSeconds: 30
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

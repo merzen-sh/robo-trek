@@ -1,16 +1,13 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
-use crate::{AppState, config::Config, db, kv::Kv, metrics};
+use crate::{AppState, config::Config, db, prometheus};
 
 pub async fn test_state(
-    name: &str,
+    _name: &str,
 ) -> (
     Arc<AppState>,
     tokio::sync::mpsc::Receiver<crate::worker::Task>,
 ) {
-    let path = format!("/tmp/robo-trek-test-{}-{}.redb", std::process::id(), name);
-    let _ = std::fs::remove_file(&path);
-    let kv = Kv::open(path).unwrap();
     let db = db::Db::open_in_memory().await.unwrap();
     let (state, task_rx) = AppState::new(
         Arc::new(Config {
@@ -21,9 +18,8 @@ pub async fn test_state(
             api_key: "secret".into(),
             guild_id: 456,
         }),
-        kv,
+        Arc::new(prometheus::Metrics::new()),
         db,
-        Arc::new(Mutex::new(metrics::MetricsHistory::new(10))),
     );
     (Arc::new(state), task_rx)
 }

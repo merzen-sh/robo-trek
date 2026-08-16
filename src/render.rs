@@ -12,7 +12,6 @@ pub mod template {
     pub const RELEASE: &str = "release";
     pub const RELEASES: &str = "releases";
     pub const HOME: &str = "home";
-    pub const METRICS: &str = "metrics";
     pub const TICKETS: &str = "tickets";
     pub const TICKETS_LIST: &str = "tickets_list";
 }
@@ -22,18 +21,16 @@ const RELEASES_TEMPLATE: &str = include_str!("../handlebars/pages/releases.hbs")
 const HEAD_TEMPLATE: &str = include_str!("../handlebars/partials/head.hbs");
 const TAILWIND_TEMPLATE: &str = include_str!("../handlebars/partials/tailwind.hbs");
 const HOME_TEMPLATE: &str = include_str!("../handlebars/pages/home.hbs");
-const METRICS_TEMPLATE: &str = include_str!("../handlebars/partials/metrics.hbs");
 const NAVBAR_TEMPLATE: &str = include_str!("../handlebars/partials/navbar.hbs");
 const TICKETS_TEMPLATE: &str = include_str!("../handlebars/pages/tickets.hbs");
 const TICKETS_LIST_TEMPLATE: &str = include_str!("../handlebars/partials/tickets_list.hbs");
 
-const TEMPLATES: [(&str, &str); 9] = [
+const TEMPLATES: [(&str, &str); 8] = [
     (template::RELEASE, RELEASE_TEMPLATE),
     (template::RELEASES, RELEASES_TEMPLATE),
     ("head", HEAD_TEMPLATE),
     ("tailwind", TAILWIND_TEMPLATE),
     (template::HOME, HOME_TEMPLATE),
-    (template::METRICS, METRICS_TEMPLATE),
     ("navbar", NAVBAR_TEMPLATE),
     (template::TICKETS, TICKETS_TEMPLATE),
     (template::TICKETS_LIST, TICKETS_LIST_TEMPLATE),

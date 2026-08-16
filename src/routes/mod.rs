@@ -8,13 +8,20 @@ mod api;
 mod dashboard;
 
 pub fn router(state: Arc<AppState>) -> Router {
-    Router::<Arc<AppState>>::new()
+    let protected = Router::<Arc<AppState>>::new()
         .route("/", get(handlers::home::dashboard_handle))
-        .route("/metrics", get(handlers::home::metrics_handle))
-        .route("/metrics/history", get(handlers::home::history_handle))
         .nest("/api", api::router())
         .nest("/dashboard", dashboard::router())
-        .route_layer(middleware::from_fn_with_state(state.clone(), auth))
+        .route_layer(middleware::from_fn_with_state(state.clone(), auth));
+
+    // The Prometheus scrape endpoint stays outside the auth layer so the
+    // scraper can collect it without an API key.
+    Router::<Arc<AppState>>::new()
+        .route(
+            "/prometheus/metrics",
+            get(handlers::home::prometheus_scrape_handle),
+        )
+        .merge(protected)
         .with_state(state)
 }
 
@@ -132,5 +139,15 @@ mod tests {
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
         assert!(body_str(resp).await.contains("Tickets"));
+    }
+
+    #[tokio::test]
+    async fn prometheus_scrape_endpoint_is_public() {
+        let app = router(test_state("prom-scrape").await.0);
+        let resp = app.oneshot(req("/prometheus/metrics")).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = body_str(resp).await;
+        assert!(body.contains("robo_trek_cpu_percent"));
+        assert!(body.contains("robo_trek_memory_percent"));
     }
 }

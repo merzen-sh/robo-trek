@@ -34,7 +34,7 @@ chrono = { version = "0.4", features = ["serde"] }
 dotenvy = "0.15"
 envy = "0.3"
 handlebars = "6.4.4"
-redb = "4.1.0"
+prometheus = "0.13"
 sqlx = { version = "0.9", features = ["runtime-tokio", "sqlite", "migrate", "macros", "chrono"] }
 tempfile = "3.27.0"
 
