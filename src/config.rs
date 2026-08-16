@@ -9,10 +9,16 @@ pub struct Config {
     pub api_port: u16,
     pub api_key: String,
     pub guild_id: u64,
+    #[serde(default = "default_log_level")]
+    pub log_level: String,
 }
 
 fn default_port() -> u16 {
     8080
+}
+
+fn default_log_level() -> String {
+    "info".to_string()
 }
 
 impl Config {

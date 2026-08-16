@@ -13,6 +13,7 @@ use serenity::model::gateway::Ready;
 use serenity::model::id::GuildId;
 use serenity::model::user::OnlineStatus;
 use serenity::prelude::*;
+use tracing::{error, info};
 
 pub struct Handler {
     config: Arc<Config>,
@@ -41,7 +42,7 @@ impl Handler {
         };
 
         if let Err(why) = command.create_response(&ctx.http, response).await {
-            println!("Cannot respond to slash command: {why}");
+            error!("Cannot respond to slash command: {why}");
         }
     }
 
@@ -64,7 +65,7 @@ impl Handler {
 #[async_trait]
 impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, ready: Ready) {
-        println!("{} is connected!", ready.user.name);
+        info!("{} is connected!", ready.user.name);
 
         ctx.set_presence(
             Some(ActivityData::playing("Robo Trek")),
@@ -85,7 +86,7 @@ impl EventHandler for Handler {
         if msg.content == "!ping"
             && let Err(why) = msg.channel_id.say(&ctx.http, "Pong!").await
         {
-            println!("Error sending message: {why:?}");
+            error!("Error sending message: {why:?}");
         }
     }
 

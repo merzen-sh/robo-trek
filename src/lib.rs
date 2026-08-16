@@ -6,6 +6,7 @@ pub mod config;
 pub mod db;
 pub mod discord;
 pub mod handlers;
+pub mod logging;
 pub mod metrics;
 pub mod middlewares;
 pub mod models;

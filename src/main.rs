@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
-use robo_trek::{AppState, api, config, db, discord, metrics, prometheus, storages, worker};
+use robo_trek::{
+    AppState, api, config, db, discord, logging, metrics, prometheus, storages, worker,
+};
 use serenity::{model::id::ChannelId, prelude::*};
+use tracing::{error, info, warn};
 
 // Multi-threaded runtime: the Discord gateway, the API server, and the
 // release worker all run concurrently, while Headless Chrome rendering is
@@ -9,6 +12,9 @@ use serenity::{model::id::ChannelId, prelude::*};
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Arc::new(config::Config::from_env()?);
+    let metrics = Arc::new(prometheus::Metrics::new());
+    logging::init_tracing(&config);
+
     let db = db::Db::open("robo-trek.sqlite").await?;
     let tickets = storages::tickets::TicketStore::new(db.clone());
 
@@ -23,11 +29,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let http = client.http.clone();
     let channel_id = ChannelId::new(config.discord_release_channel_id);
 
-    let (state, task_rx) = AppState::new(
-        Arc::clone(&config),
-        Arc::new(prometheus::Metrics::new()),
-        db,
-    );
+    let (state, task_rx) = AppState::new(Arc::clone(&config), metrics, db);
     let state = Arc::new(state);
     let worker_state = worker::WorkerState::new(http, channel_id, state.releases.clone());
 
@@ -39,23 +41,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Monitoring Background Tasks (Isolation Phase)
     let api_monitor = tokio::spawn(async move {
         match api_task.await {
-            Ok(Ok(())) => eprintln!("[Warning] API server stopped cleanly"),
-            Ok(Err(e)) => eprintln!("[Error] API server error: {e}"),
-            Err(e) => eprintln!("[Panic] API server task panicked: {e}"),
+            Ok(Ok(())) => warn!("API server stopped cleanly"),
+            Ok(Err(e)) => error!("API server error: {e}"),
+            Err(e) => error!("API server task panicked: {e}"),
         }
     });
 
     let worker_monitor = tokio::spawn(async move {
         match worker_task.await {
-            Ok(()) => eprintln!("[Warning] Release worker stopped cleanly"),
-            Err(e) => eprintln!("[Panic] Release worker task panicked: {e}"),
+            Ok(()) => warn!("Release worker stopped cleanly"),
+            Err(e) => error!("Release worker task panicked: {e}"),
         }
     });
 
     let sampler_monitor = tokio::spawn(async move {
         match sampler_task.await {
-            Ok(()) => eprintln!("[Warning] Metrics sampler stopped cleanly"),
-            Err(e) => eprintln!("[Panic] Metrics sampler task panicked: {e}"),
+            Ok(()) => warn!("Metrics sampler stopped cleanly"),
+            Err(e) => error!("Metrics sampler task panicked: {e}"),
         }
     });
 
@@ -65,16 +67,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Main Critical Loop
     tokio::select! {
         result = started => match result {
-            Ok(()) => println!("[System] Discord client stopped"),
-            Err(e) => eprintln!("[System Error] Discord client error: {e:?}"),
+            Ok(()) => info!("Discord client stopped"),
+            Err(e) => error!("Discord client error: {e:?}"),
         },
         _ = shutdown_signal() => {
-            println!("[System] Shutting down via signal");
+            info!("Shutting down via signal");
         }
     }
 
     // Teardown
-    println!("[System] Cleaning up resources...");
+    info!("Cleaning up resources...");
     shard_manager.shutdown_all().await;
 
     api_monitor.abort();

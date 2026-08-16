@@ -1,6 +1,6 @@
-use std::{sync::Arc, time::Duration};
-
 use crate::prometheus::Metrics;
+use std::{sync::Arc, time::Duration};
+use tracing::error;
 
 #[derive(Clone)]
 pub struct CpuTimes {
@@ -102,7 +102,7 @@ pub fn spawn_sampler(metrics: Arc<Metrics>) -> tokio::task::JoinHandle<()> {
                 Ok((cpu, mem_percent, mem_used_kb, mem_total_kb)) => {
                     metrics.record(cpu, mem_percent, mem_used_kb, mem_total_kb);
                 }
-                Err(e) => eprintln!("metrics sampler error: {e}"),
+                Err(e) => error!("metrics sampler error: {e}"),
             }
             tokio::time::sleep(SAMPLE_INTERVAL).await;
         }

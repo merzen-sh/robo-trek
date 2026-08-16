@@ -11,6 +11,7 @@ use serenity::model::application::{
 use serenity::model::channel::AutoArchiveDuration;
 use serenity::model::id::ChannelId;
 use serenity::prelude::*;
+use tracing::error;
 
 pub const MODAL_ID: &str = "ticket_modal";
 pub const CLOSE_PREFIX: &str = "close_ticket";
@@ -63,7 +64,7 @@ pub async fn handle_modal(
     {
         Ok(ticket) => ticket,
         Err(why) => {
-            println!("failed to create ticket: {why}");
+            error!("failed to create ticket: {why}");
             let content = CreateInteractionResponseFollowup::new()
                 .content("Failed to create the ticket. Try again later.");
             let _ = modal.create_followup(&ctx.http, content).await;
@@ -103,7 +104,7 @@ pub async fn handle_modal(
             let _ = modal.create_followup(&ctx.http, content).await;
         }
         Err(why) => {
-            println!("failed to create ticket thread: {why}");
+            error!("failed to create ticket thread: {why}");
             let content = CreateInteractionResponseFollowup::new()
                 .content(format!(
                     "Ticket **#{ticket_id}** created, but the thread could not be opened: {why}",
@@ -142,7 +143,7 @@ pub async fn handle_close(ctx: &Context, component: ComponentInteraction, ticket
         }
         Ok(None) => format!("Ticket #{id} is already closed."),
         Err(why) => {
-            println!("failed to close ticket {id}: {why}");
+            error!("failed to close ticket {id}: {why}");
             format!("Failed to close ticket #{id}. Try again later.")
         }
     };

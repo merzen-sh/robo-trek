@@ -7,6 +7,7 @@ use serenity::{
 };
 
 use crate::{render, storages::releases::ReleaseStore};
+use tracing::error;
 
 /// A unit of work for the background worker. Add a variant here (and a branch
 /// in `process`) for each new task type; the worker loop dispatches on it.
@@ -44,7 +45,7 @@ pub fn spawn(
     tokio::spawn(async move {
         while let Some(task) = rx.recv().await {
             if let Err(e) = process(&task, &state).await {
-                eprintln!("failed to process task {task:?}: {e}");
+                error!("failed to process task {task:?}: {e}");
             }
         }
     })

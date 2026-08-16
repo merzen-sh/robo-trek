@@ -17,6 +17,7 @@ pub async fn test_state(
             api_port: 3000,
             api_key: "secret".into(),
             guild_id: 456,
+            log_level: "info".into(),
         }),
         Arc::new(prometheus::Metrics::new()),
         db,

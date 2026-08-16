@@ -37,6 +37,8 @@ handlebars = "6.4.4"
 prometheus = "0.13"
 sqlx = { version = "0.9", features = ["runtime-tokio", "sqlite", "migrate", "macros", "chrono"] }
 tempfile = "3.27.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [profile.dev]
 opt-level = 0
