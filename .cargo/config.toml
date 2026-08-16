@@ -1,2 +1,11 @@
 [target.x86_64-unknown-linux-gnu]
-rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+rustflags = [
+    # Arch: `sudo pacman -S lld clang`
+    # "-Clink-arg=-fuse-ld=lld",
+    # Mold linker
+    # Arch: sudo pacman -S mold clang
+    "-Clink-arg=-fuse-ld=mold",
+
+    # Nightly
+    "-Zshare-generics=y"
+]
